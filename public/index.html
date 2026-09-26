@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CLN Questions — Practice. Improve. Get Ahead.</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎓</text></svg>">
+</head>
+<body>
+
+  <!-- NAVIGATION BAR -->
+  <header class="navbar">
+    <div class="container nav-container">
+      <a href="#" class="brand-logo" onclick="app.showView('home')">
+        <span style="font-size: 1.4rem;">🎓</span>
+        <span>CLN Questions</span>
+        <span class="brand-badge">FRESHMAN</span>
+      </a>
+
+      <ul class="nav-links">
+        <li><a class="nav-link active" onclick="app.showView('home')">Home</a></li>
+        <li><a class="nav-link" onclick="app.showView('courses')">Courses</a></li>
+        <li class="student-only" style="display:none;"><a class="nav-link" onclick="app.showView('dashboard')">Dashboard</a></li>
+        <li class="student-only" style="display:none;"><a class="nav-link" onclick="app.showView('history')">History</a></li>
+        <li class="admin-only" style="display:none;"><a class="nav-link" onclick="app.showView('admin')">Admin Panel</a></li>
+      </ul>
+
+      <div id="nav-user-area">
+        <!-- Injected dynamically via JS -->
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN VIEW CONTAINER -->
+  <main id="main-content" style="flex: 1;">
+
+    <!-- 1. HOMEPAGE VIEW -->
+    <section id="view-home" class="view-section">
+      <!-- HERO -->
+      <div class="hero-section">
+        <div class="container">
+          <h1 class="hero-title">Practice. Improve. Get Ahead.</h1>
+          <p class="hero-subtitle">
+            Practice your freshman courses with focused, timed quizzes. Test what you actually remember, identify weak areas, and track your progress as you improve.
+          </p>
+
+          <div class="hero-actions">
+            <button class="btn btn-primary btn-lg" onclick="app.handleStartPracticingFree()">Start Practicing Now</button>
+            <button class="btn btn-secondary btn-lg" style="color:#fff; border-color:#fff;" onclick="app.showView('courses')">Explore Courses</button>
+          </div>
+
+          <!-- HERO INTERACTIVE PREVIEW -->
+          <div class="hero-preview-box">
+            <div class="preview-header">
+              <div>
+                <span class="preview-tag">LOGIC & CRITICAL THINKING</span>
+                <span style="color:var(--text-muted); font-size:0.85rem; margin-left:8px;">Chapter 1 • Question 2 of 10</span>
+              </div>
+              <div class="preview-timer">⏱️ 08:45</div>
+            </div>
+
+            <h4 style="font-size:1.05rem; font-weight:700; margin-bottom:16px; color:var(--navy);">
+              In the argument: "All freshmen take Logic. Kebede is a freshman. Therefore, Kebede takes Logic.", what role does "Kebede is a freshman" play?
+            </h4>
+
+            <div class="option-list" style="margin:12px 0;">
+              <div class="option-card">
+                <span class="option-letter">A</span>
+                <span>The main conclusion</span>
+              </div>
+              <div class="option-card selected">
+                <span class="option-letter">B</span>
+                <span>A minor premise</span>
+              </div>
+              <div class="option-card">
+                <span class="option-letter">C</span>
+                <span>An informal fallacy</span>
+              </div>
+              <div class="option-card">
+                <span class="option-letter">D</span>
+                <span>A non-propositional statement</span>
+              </div>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px;">
+              <span style="font-size:0.85rem; color:var(--text-muted);">Progress: 20% complete</span>
+              <button class="btn btn-primary btn-sm">Next Question →</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="container">
+        <!-- WHY PRACTICE QUESTIONS -->
+        <div class="section-header">
+          <h2 class="section-title">Why practice instead of just rereading?</h2>
+          <p class="section-subtitle">
+            Learning isn't only about seeing information again. Practice requires you to retrieve what you learned, helping you discover what you actually know and what needs more work.
+          </p>
+        </div>
+
+        <div class="grid-3">
+          <div class="feature-card">
+            <div class="feature-num">01 — Retrieve</div>
+            <h3 style="font-size:1.15rem; font-weight:700; margin-bottom:8px;">Active Recall</h3>
+            <p style="color:var(--text-muted); font-size:0.9rem;">
+              Recall information actively instead of simply recognizing notes when rereading.
+            </p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-num">02 — Identify</div>
+            <h3 style="font-size:1.15rem; font-weight:700; margin-bottom:8px;">Target Weak Spots</h3>
+            <p style="color:var(--text-muted); font-size:0.9rem;">
+              Discover exactly which specific topics and questions you struggle with early.
+            </p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-num">03 — Reinforce</div>
+            <h3 style="font-size:1.15rem; font-weight:700; margin-bottom:8px;">Strengthen Retention</h3>
+            <p style="color:var(--text-muted); font-size:0.9rem;">
+              Use repeated practice and instant explanations to solidify long-term learning.
+            </p>
+          </div>
+        </div>
+
+        <!-- LEARNING RESEARCH SECTION -->
+        <div class="card" style="margin-top:40px; background:var(--blue-soft); border-color:var(--blue-light);">
+          <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+            <span style="font-size:1.8rem;">🔬</span>
+            <h3 style="font-size:1.3rem; font-weight:700; color:var(--navy);">What learning research says</h3>
+          </div>
+
+          <p style="color:var(--text-main); margin-bottom:16px;">
+            Research across many educational settings has found that practice testing and retrieval practice can support learning and retention compared with some forms of passive study. CLN Questions is built around learning methods that research has studied extensively.
+          </p>
+
+          <div class="grid-3" style="gap:16px;">
+            <div style="background:#fff; padding:16px; border-radius:8px; border:1px solid var(--border);">
+              <div style="font-size:1.4rem; font-weight:800; color:var(--blue);">222 Studies</div>
+              <div style="font-size:0.85rem; color:var(--text-muted);">
+                A systematic meta-analysis examined testing across 222 independent studies involving 48,478 students.
+              </div>
+            </div>
+
+            <div style="background:#fff; padding:16px; border-radius:8px; border:1px solid var(--border);">
+              <div style="font-size:1.4rem; font-weight:800; color:var(--green);">Practice Testing</div>
+              <div style="font-size:0.85rem; color:var(--text-muted);">
+                Educational research reviews consistently identify practice testing as a high-utility learning technique.
+              </div>
+            </div>
+
+            <div style="background:#fff; padding:16px; border-radius:8px; border:1px solid var(--border);">
+              <div style="font-size:1.4rem; font-weight:800; color:var(--navy);">Retrieval Practice</div>
+              <div style="font-size:0.85rem; color:var(--text-muted);">
+                Retrieving memory traces during timed quizzes significantly supports longer-term retention for exams.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- FEATURED COURSES -->
+        <div class="section-header">
+          <h2 class="section-title">Practice your freshman courses</h2>
+          <p class="section-subtitle">Comprehensive practice across Natural and Social Science university courses.</p>
+        </div>
+
+        <div id="home-courses-grid" class="grid-3">
+          <!-- Dynamically populated -->
+        </div>
+
+        <!-- HOW CLN QUESTIONS WORKS -->
+        <div class="section-header">
+          <h2 class="section-title">How CLN Questions works</h2>
+          <p class="section-subtitle">Five simple steps to academic improvement.</p>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; margin-bottom:48px; text-align:center;">
+          <div style="flex:1; min-width:140px; background:#fff; padding:20px; border-radius:12px; border:1px solid var(--border);">
+            <div style="font-weight:800; color:var(--blue); font-size:1.2rem;">01</div>
+            <div style="font-weight:700; margin-top:6px;">Choose Course</div>
+          </div>
+          <div style="font-size:1.5rem; color:var(--text-muted);">→</div>
+          <div style="flex:1; min-width:140px; background:#fff; padding:20px; border-radius:12px; border:1px solid var(--border);">
+            <div style="font-weight:800; color:var(--blue); font-size:1.2rem;">02</div>
+            <div style="font-weight:700; margin-top:6px;">Choose Chapter</div>
+          </div>
+          <div style="font-size:1.5rem; color:var(--text-muted);">→</div>
+          <div style="flex:1; min-width:140px; background:#fff; padding:20px; border-radius:12px; border:1px solid var(--border);">
+            <div style="font-weight:800; color:var(--blue); font-size:1.2rem;">03</div>
+            <div style="font-weight:700; margin-top:6px;">Timed Quiz</div>
+          </div>
+          <div style="font-size:1.5rem; color:var(--text-muted);">→</div>
+          <div style="flex:1; min-width:140px; background:#fff; padding:20px; border-radius:12px; border:1px solid var(--border);">
+            <div style="font-weight:800; color:var(--blue); font-size:1.2rem;">04</div>
+            <div style="font-weight:700; margin-top:6px;">See Results</div>
+          </div>
+          <div style="font-size:1.5rem; color:var(--text-muted);">→</div>
+          <div style="flex:1; min-width:140px; background:#fff; padding:20px; border-radius:12px; border:1px solid var(--border);">
+            <div style="font-weight:800; color:var(--blue); font-size:1.2rem;">05</div>
+            <div style="font-weight:700; margin-top:6px;">Review & Repeat</div>
+          </div>
+        </div>
+
+        <!-- PROGRESS PREVIEW DEMO -->
+        <div class="card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:24px;">
+          <div>
+            <span style="font-size:0.8rem; font-weight:800; color:var(--gold); text-transform:uppercase; letter-spacing:0.05em;">STUDENT PROGRESS PREVIEW</span>
+            <h3 style="font-size:1.4rem; font-weight:700; color:var(--navy); margin-top:4px;">Your Practice Dashboard</h3>
+            <p style="color:var(--text-muted); font-size:0.9rem;">Track completed quizzes, average score, and total earned XP over time.</p>
+          </div>
+
+          <div style="display:flex; gap:20px;">
+            <div style="text-align:center; padding:12px 20px; background:var(--gold-soft); border-radius:8px; border:1px solid #F6DF9C;">
+              <div style="font-size:1.4rem; font-weight:900; color:#8C6208;">1,240 XP</div>
+              <div style="font-size:0.8rem; font-weight:600; color:var(--text-muted);">Total XP</div>
+            </div>
+            <div style="text-align:center; padding:12px 20px; background:var(--blue-soft); border-radius:8px; border:1px solid var(--blue-light);">
+              <div style="font-size:1.4rem; font-weight:900; color:var(--blue);">18</div>
+              <div style="font-size:0.8rem; font-weight:600; color:var(--text-muted);">Quizzes Done</div>
+            </div>
+            <div style="text-align:center; padding:12px 20px; background:var(--green-soft); border-radius:8px; border:1px solid var(--green-light);">
+              <div style="font-size:1.4rem; font-weight:900; color:var(--green);">78%</div>
+              <div style="font-size:0.8rem; font-weight:600; color:var(--text-muted);">Avg Score</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- FINAL CTA -->
+        <div style="background:var(--navy); color:#fff; border-radius:16px; padding:48px; text-align:center; margin:60px 0;">
+          <h2 style="font-size:2rem; font-weight:800; margin-bottom:12px;">Think you're ready?</h2>
+          <p style="font-size:1.1rem; color:rgba(255,255,255,0.85); max-width:500px; margin:0 auto 24px;">
+            Don't just assume you know it. Test it under realistic exam conditions.
+          </p>
+          <button class="btn btn-primary btn-lg" onclick="app.handleStartPracticingFree()">Start Practicing Now</button>
+        </div>
+
+        <!-- FAQ -->
+        <div class="section-header">
+          <h2 class="section-title">Frequently Asked Questions</h2>
+        </div>
+
+        <div style="max-width:760px; margin:0 auto 60px;">
+          <div class="card" style="margin-bottom:12px; padding:18px 24px;">
+            <h4 style="font-weight:700; color:var(--navy); margin-bottom:4px;">What is CLN Questions?</h4>
+            <p style="color:var(--text-muted); font-size:0.9rem;">A freshman-focused platform for practicing university courses through chapter-based, timed quizzes.</p>
+          </div>
+          <div class="card" style="margin-bottom:12px; padding:18px 24px;">
+            <h4 style="font-weight:700; color:var(--navy); margin-bottom:4px;">How do I access CLN Questions?</h4>
+            <p style="color:var(--text-muted); font-size:0.9rem;">Simply register a student account to access freshman practice courses, chapter quizzes, and performance tracking.</p>
+          </div>
+          <div class="card" style="margin-bottom:12px; padding:18px 24px;">
+            <h4 style="font-weight:700; color:var(--navy); margin-bottom:4px;">Are quizzes timed?</h4>
+            <p style="color:var(--text-muted); font-size:0.9rem;">Yes. Each chapter quiz has its own designated time limit to build exam discipline.</p>
+          </div>
+          <div class="card" style="margin-bottom:12px; padding:18px 24px;">
+            <h4 style="font-weight:700; color:var(--navy); margin-bottom:4px;">Can I see my previous results and track progress?</h4>
+            <p style="color:var(--text-muted); font-size:0.9rem;">Yes. Every quiz attempt is stored permanently in your history along with earned XP and score metrics.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. LOGIN VIEW -->
+    <section id="view-login" class="view-section" style="display:none; padding:60px 0;">
+      <div class="container" style="max-width:440px;">
+        <div class="card">
+          <h2 style="text-align:center; color:var(--navy); margin-bottom:8px; font-weight:800;">Log In to CLN</h2>
+          <p style="text-align:center; color:var(--text-muted); font-size:0.9rem; margin-bottom:24px;">Enter your email or Ethiopian phone number</p>
+
+          <form id="form-login" onsubmit="app.handleLogin(event)">
+            <div class="form-group">
+              <label class="form-label">Email or Ethiopian Phone</label>
+              <input type="text" id="login-identifier" class="form-input" placeholder="e.g. student@cln.edu.et or +251911223344" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Password</label>
+              <input type="password" id="login-password" class="form-input" placeholder="••••••••" required>
+            </div>
+
+            <div id="login-error" style="color:var(--red); font-size:0.85rem; margin-bottom:12px; display:none;"></div>
+
+            <button type="submit" class="btn btn-primary btn-full btn-lg">Log In</button>
+          </form>
+
+          <div style="text-align:center; margin-top:20px; font-size:0.9rem; color:var(--text-muted);">
+            Don't have an account? <a style="color:var(--blue); font-weight:600; cursor:pointer;" onclick="app.showView('register')">Register Now</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. REGISTER VIEW -->
+    <section id="view-register" class="view-section" style="display:none; padding:60px 0;">
+      <div class="container" style="max-width:480px;">
+        <div class="card">
+          <h2 style="text-align:center; color:var(--navy); margin-bottom:8px; font-weight:800;">Register Student Account</h2>
+          <p style="text-align:center; color:var(--text-muted); font-size:0.9rem; margin-bottom:24px;">Join CLN Questions to practice and track your progress</p>
+
+          <form id="form-register" onsubmit="app.handleRegister(event)">
+            <div class="form-group">
+              <label class="form-label">Full Name</label>
+              <input type="text" id="reg-fullname" class="form-input" placeholder="e.g. Abebe Bikila" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Email Address</label>
+              <input type="email" id="reg-email" class="form-input" placeholder="student@example.com" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Ethiopian Phone Number</label>
+              <input type="tel" id="reg-phone" class="form-input" placeholder="+251911223344 or 0911223344" required>
+              <span style="font-size:0.75rem; color:var(--text-muted);">Format: +2519XXXXXXXX or 09XXXXXXXX</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Password</label>
+              <input type="password" id="reg-password" class="form-input" placeholder="At least 6 characters" required minlength="6">
+            </div>
+
+            <div class="checkbox-group">
+              <input type="checkbox" id="reg-marketing">
+              <label for="reg-marketing">I agree to receive educational/product updates from CLN (Optional).</label>
+            </div>
+
+            <div id="reg-error" style="color:var(--red); font-size:0.85rem; margin-bottom:12px; display:none;"></div>
+
+            <button type="submit" class="btn btn-primary btn-full btn-lg">Create Student Account</button>
+          </form>
+
+          <div style="text-align:center; margin-top:20px; font-size:0.9rem; color:var(--text-muted);">
+            Already registered? <a style="color:var(--blue); font-weight:600; cursor:pointer;" onclick="app.showView('login')">Log In</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. COURSES VIEW -->
+    <section id="view-courses" class="view-section" style="display:none; padding:40px 0;">
+      <div class="container">
+        <div class="section-header" style="margin-top:0;">
+          <h2 class="section-title">Freshman Academic Courses</h2>
+          <p class="section-subtitle">Select a course to explore chapters and practice quizzes.</p>
+        </div>
+
+        <div id="courses-list-grid" class="grid-3">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. COURSE DETAIL VIEW (CHAPTERS LIST) -->
+    <section id="view-course-detail" class="view-section" style="display:none; padding:40px 0;">
+      <div class="container">
+        <button class="btn btn-secondary btn-sm" style="margin-bottom:20px;" onclick="app.showView('courses')">← Back to All Courses</button>
+
+        <div id="course-header-card" class="card" style="background:var(--navy); color:#fff; display:flex; gap:24px; align-items:center; flex-wrap:wrap;">
+          <!-- Dynamically populated -->
+        </div>
+
+        <h3 style="font-size:1.3rem; font-weight:700; color:var(--navy); margin-bottom:16px;">Course Chapters</h3>
+        <div id="chapters-list-grid" class="grid-2">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. CHAPTER DETAIL VIEW (QUIZ SELECTION) -->
+    <section id="view-chapter-detail" class="view-section" style="display:none; padding:40px 0;">
+      <div class="container" style="max-width:720px;">
+        <button class="btn btn-secondary btn-sm" style="margin-bottom:20px;" onclick="app.showCourseDetail(app.state.currentCourseId)">← Back to Chapters</button>
+
+        <div id="chapter-detail-content">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. QUIZ EXAMINATION ENGINE VIEW -->
+    <section id="view-quiz" class="view-section" style="display:none; padding:24px 0;">
+      <div class="container" style="max-width:800px;">
+        <!-- TOP HEADER BAR -->
+        <div class="quiz-header-bar">
+          <div>
+            <div id="quiz-course-title" style="font-size:0.8rem; font-weight:700; opacity:0.8; text-transform:uppercase;">LOGIC & CRITICAL THINKING</div>
+            <div id="quiz-title-display" style="font-size:1.2rem; font-weight:800;">Chapter 1 Practice Quiz</div>
+          </div>
+
+          <div id="quiz-timer-container" class="quiz-timer-box">
+            <span>⏱️</span>
+            <span id="quiz-timer-text">15:00</span>
+          </div>
+        </div>
+
+        <!-- MAIN QUESTION CARD -->
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; font-weight:700; color:var(--text-muted); font-size:0.9rem;">
+            <span id="question-progress-text">Question 1 of 5</span>
+            <span id="quiz-difficulty-badge" class="brand-badge" style="background:var(--blue-light);">MEDIUM</span>
+          </div>
+
+          <h3 id="question-text-display" style="font-size:1.15rem; font-weight:700; color:var(--navy); margin-bottom:20px; line-height:1.4;">
+            <!-- Question text -->
+          </h3>
+
+          <div id="question-image-container" style="margin-bottom:16px; display:none;">
+            <img id="question-img" src="" alt="Question diagram" style="max-width:100%; max-height:260px; border-radius:8px;">
+          </div>
+
+          <!-- MCQ OPTIONS -->
+          <div id="quiz-options-container" class="option-list">
+            <!-- Options A, B, C, D -->
+          </div>
+
+          <!-- NAVIGATION CONTROLS -->
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:24px; padding-top:16px; border-top:1px solid var(--border);">
+            <button id="btn-prev-q" class="btn btn-secondary" onclick="quizEngine.prevQuestion()">Previous</button>
+            <button id="btn-next-q" class="btn btn-primary" onclick="quizEngine.nextQuestion()">Next →</button>
+            <button id="btn-submit-quiz" class="btn btn-success btn-lg" style="display:none;" onclick="quizEngine.submitQuiz()">Submit Quiz</button>
+          </div>
+        </div>
+
+        <!-- QUESTION NAVIGATOR GRID -->
+        <div class="card" style="padding:16px 20px;">
+          <div style="font-weight:700; font-size:0.85rem; color:var(--text-muted); margin-bottom:8px;">QUESTION NAVIGATOR</div>
+          <div id="quiz-nav-grid" class="nav-grid">
+            <!-- Items 1..N -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8. QUIZ RESULTS VIEW -->
+    <section id="view-results" class="view-section" style="display:none; padding:40px 0;">
+      <div class="container" style="max-width:760px;">
+        <div class="score-banner">
+          <div style="font-size:0.9rem; font-weight:800; opacity:0.85; text-transform:uppercase; letter-spacing:0.05em;">QUIZ COMPLETE</div>
+          <div id="results-score-main" class="score-main">4 / 5</div>
+          <div id="results-percentage" style="font-size:1.2rem; font-weight:700;">80% Accuracy</div>
+          <div id="results-xp-earned" class="xp-badge" style="display:inline-block; font-size:1rem; padding:6px 16px; margin-top:16px;">
+            +40 XP Earned!
+          </div>
+        </div>
+
+        <div style="display:flex; gap:16px; justify-content:center; margin-bottom:32px; flex-wrap:wrap;">
+          <button class="btn btn-primary" onclick="app.reviewAnswers()">Review Answers</button>
+          <button class="btn btn-secondary" onclick="app.retryCurrentQuiz()">Try Again</button>
+          <button class="btn btn-secondary" onclick="app.showCourseDetail(app.state.currentCourseId)">Back to Course</button>
+        </div>
+
+        <!-- DETAILED ANSWER REVIEW CONTAINER -->
+        <div id="review-answers-container" style="display:none;">
+          <h3 style="font-size:1.3rem; font-weight:700; color:var(--navy); margin-bottom:16px;">Question Breakdown & Explanations</h3>
+          <div id="review-questions-list">
+            <!-- Review items injected -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 9. STUDENT DASHBOARD VIEW -->
+    <section id="view-dashboard" class="view-section" style="display:none; padding:40px 0;">
+      <div class="container">
+        <div id="dashboard-welcome" style="margin-bottom:24px;">
+          <h2 style="font-size:1.8rem; font-weight:800; color:var(--navy);">Welcome Back, <span id="dash-student-name">Student</span>!</h2>
+          <p style="color:var(--text-muted);">Here is your freshman practice summary.</p>
+        </div>
+
+        <div class="grid-3" style="margin-bottom:32px;">
+          <div class="card" style="border-left:4px solid var(--gold);">
+            <div style="font-size:0.8rem; font-weight:700; color:var(--text-muted);">TOTAL EARNED XP</div>
+            <div id="dash-xp" style="font-size:2rem; font-weight:900; color:#8C6208; margin:4px 0;">1,240 XP</div>
+            <div style="font-size:0.8rem; color:var(--text-muted);">10 XP per correct answer</div>
+          </div>
+
+          <div class="card" style="border-left:4px solid var(--blue);">
+            <div style="font-size:0.8rem; font-weight:700; color:var(--text-muted);">QUIZZES COMPLETED</div>
+            <div id="dash-quizzes-count" style="font-size:2rem; font-weight:900; color:var(--blue); margin:4px 0;">18</div>
+            <div style="font-size:0.8rem; color:var(--text-muted);">Practice sessions done</div>
+          </div>
+
+          <div class="card" style="border-left:4px solid var(--green);">
+            <div style="font-size:0.8rem; font-weight:700; color:var(--text-muted);">AVERAGE ACCURACY</div>
+            <div id="dash-avg-score" style="font-size:2rem; font-weight:900; color:var(--green); margin:4px 0;">78%</div>
+            <div style="font-size:0.8rem; color:var(--text-muted);">Overall accuracy rate</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 style="font-size:1.2rem; font-weight:700; color:var(--navy); margin-bottom:16px;">Recent Quiz Attempts</h3>
+          <div id="dash-recent-attempts">
+            <!-- List injected -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 10. STUDENT HISTORY VIEW -->
+    <section id="view-history" class="view-section" style="display:none; padding:40px 0;">
+      <div class="container">
+        <div class="section-header" style="margin-top:0;">
+          <h2 class="section-title">Your Quiz History</h2>
+          <p class="section-subtitle">Complete log of all previous timed quiz attempts.</p>
+        </div>
+
+        <div class="card">
+          <div id="history-table-container">
+            <!-- Table injected -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 11. SUSPENDED USER VIEW -->
+    <section id="view-suspended" class="view-section" style="display:none; padding:60px 0;">
+      <div class="container">
+        <div class="suspended-box">
+          <div style="font-size:3rem; margin-bottom:12px;">🚫</div>
+          <h2 class="suspended-title">Your account has been suspended.</h2>
+          <p style="color:var(--text-main); margin-bottom:20px; font-size:1rem;">
+            You currently cannot access CLN Questions. If you believe this is a mistake or need assistance, please contact our support team.
+          </p>
+          <a href="https://t.me/CLN_AAU_Admin" target="_blank" class="btn btn-primary btn-lg">
+            📱 Contact Support on Telegram (@CLN_AAU_Admin)
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- 12. ADMIN DASHBOARD & CRUD VIEW -->
+    <section id="view-admin" class="view-section" style="display:none; padding:40px 0;">
+      <div class="container">
+        <div class="section-header" style="margin-top:0; text-align:left;">
+          <h2 class="section-title">CLN Platform Admin Management</h2>
+          <p class="section-subtitle">Manage students, account status, courses, chapters, quizzes, and questions.</p>
+        </div>
+
+        <!-- ADMIN STATS CARDS -->
+        <div class="grid-3" style="margin-bottom:32px;">
+          <div class="card" style="padding:16px;">
+            <div style="font-size:0.8rem; font-weight:700; color:var(--text-muted);">TOTAL STUDENTS</div>
+            <div id="admin-stat-students" style="font-size:1.8rem; font-weight:900; color:var(--navy);">0</div>
+          </div>
+          <div class="card" style="padding:16px;">
+            <div style="font-size:0.8rem; font-weight:700; color:var(--text-muted);">QUIZ ATTEMPTS</div>
+            <div id="admin-stat-attempts" style="font-size:1.8rem; font-weight:900; color:var(--blue);">0</div>
+          </div>
+          <div class="card" style="padding:16px;">
+            <div style="font-size:0.8rem; font-weight:700; color:var(--text-muted);">SUSPENDED USERS</div>
+            <div id="admin-stat-suspended" style="font-size:1.8rem; font-weight:900; color:var(--red);">0</div>
+          </div>
+        </div>
+
+        <!-- ADMIN MANAGEMENT TAB NAV -->
+        <div style="display:flex; gap:12px; margin-bottom:20px;">
+          <button class="btn btn-primary btn-sm admin-tab-btn" onclick="app.showAdminTab('users')">Students Management</button>
+          <button class="btn btn-secondary btn-sm admin-tab-btn" onclick="app.showAdminTab('courses')">Courses & Content CRUD</button>
+        </div>
+
+        <!-- TAB 1: USERS TABLE -->
+        <div id="admin-tab-users" class="card">
+          <h3 style="font-size:1.1rem; font-weight:700; color:var(--navy); margin-bottom:16px;">Registered Student Accounts</h3>
+          <div style="overflow-x:auto;">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Student Name</th>
+                  <th>Email</th>
+                  <th>Phone</th>
+                  <th>XP</th>
+                  <th>Attempts</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="admin-users-tbody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TAB 2: COURSE & QUESTION CONTENT CREATION -->
+        <div id="admin-tab-courses" class="card" style="display:none;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h3 style="font-size:1.1rem; font-weight:700; color:var(--navy);">Content Management</h3>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-primary btn-sm" onclick="app.openAddCourseModal()">+ Add Course</button>
+              <button class="btn btn-secondary btn-sm" onclick="app.openAddChapterModal()">+ Add Chapter</button>
+              <button class="btn btn-secondary btn-sm" onclick="app.openAddQuizModal()">+ Add Quiz</button>
+              <button class="btn btn-success btn-sm" onclick="app.openAddQuestionModal()">+ Add Question</button>
+            </div>
+          </div>
+
+          <div id="admin-content-tree">
+            <!-- Dynamically populated content tree -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODALS -->
+  <div id="modal-container" class="modal-overlay" style="display:none;" onclick="if(event.target === this) app.closeModal()">
+    <div class="modal-content" id="modal-body">
+      <!-- Modal dynamically injected -->
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="container" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+      <div>
+        <div style="font-weight:700; color:#fff;">CLN Questions — Practice. Improve. Get Ahead.</div>
+        <div style="font-size:0.8rem; margin-top:4px;">Built for Ethiopian University Freshmen • Natural & Social Science</div>
+      </div>
+      <div style="font-size:0.85rem;">
+        © 2026 CLN Questions. All rights reserved.
+      </div>
+    </div>
+  </footer>
+
+  <!-- APPLICATION SCRIPTS -->
+  <script src="/js/api.js"></script>
+  <script src="/js/quiz.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
