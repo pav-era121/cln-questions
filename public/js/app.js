@@ -239,7 +239,8 @@ const app = {
         `;
       } else {
         gridEl.innerHTML = chapters.map(ch => `
-          <div class="card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:0;">
+          <div class="card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; margin-bottom:0;">
+            ${ch.image_url ? `<img src="${ch.image_url}" style="width:68px; height:68px; object-fit:cover; border-radius:8px; border:1px solid var(--border);" alt="${ch.name}">` : ''}
             <div style="flex:1; min-width:200px;">
               <h4 style="font-size:1.1rem; font-weight:700; color:var(--navy);">${ch.name}</h4>
               <p style="color:var(--text-muted); font-size:0.88rem; margin-top:4px;">${ch.description}</p>
@@ -264,9 +265,12 @@ const app = {
 
       const container = document.getElementById('chapter-detail-content');
       container.innerHTML = `
-        <div class="card" style="margin-bottom:24px;">
-          <h2 style="font-size:1.5rem; font-weight:800; color:var(--navy);">${ch.name}</h2>
-          <p style="color:var(--text-muted); margin-top:6px;">${ch.description}</p>
+        <div class="card" style="margin-bottom:24px; display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
+          ${ch.image_url ? `<img src="${ch.image_url}" style="width:80px; height:80px; object-fit:cover; border-radius:10px; border:1px solid var(--border);" alt="${ch.name}">` : ''}
+          <div style="flex:1; min-width:220px;">
+            <h2 style="font-size:1.5rem; font-weight:800; color:var(--navy);">${ch.name}</h2>
+            <p style="color:var(--text-muted); margin-top:6px;">${ch.description}</p>
+          </div>
         </div>
 
         <h3 style="font-size:1.2rem; font-weight:700; color:var(--navy); margin-bottom:16px;">Available Chapter Quizzes</h3>
@@ -536,10 +540,95 @@ const app = {
     }
   },
 
+  escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  },
+
+  handleImageFileInput(fileInput, targetInputId, previewContainerId) {
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please select a valid image file (PNG, JPG, WebP, etc.)');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 800;
+        let width = img.width;
+        let height = img.height;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        const targetInput = document.getElementById(targetInputId);
+        if (targetInput) targetInput.value = dataUrl;
+
+        this.updateImagePreview(dataUrl, previewContainerId);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  },
+
+  updateImagePreview(imageUrl, previewContainerId) {
+    const previewEl = document.getElementById(previewContainerId);
+    if (!previewEl) return;
+
+    if (imageUrl && imageUrl.trim()) {
+      previewEl.style.display = 'block';
+      previewEl.innerHTML = `
+        <div style="position:relative; display:inline-block; margin-top:8px;">
+          <img src="${imageUrl}" alt="Preview" style="max-height:110px; max-width:100%; border-radius:8px; border:2px solid var(--blue); object-fit:cover; display:block;">
+          <span style="font-size:0.75rem; color:var(--green); font-weight:700; margin-top:4px; display:block;">✓ Image selected & ready</span>
+        </div>
+      `;
+    } else {
+      previewEl.style.display = 'none';
+      previewEl.innerHTML = '';
+    }
+  },
+
+  toggleQuestionsList(quizId) {
+    if (!this.state.expandedQuizzes) this.state.expandedQuizzes = new Set();
+    const el = document.getElementById(`quiz-questions-${quizId}`);
+    if (!el) return;
+    if (el.style.display === 'none' || !el.style.display) {
+      el.style.display = 'block';
+      this.state.expandedQuizzes.add(quizId);
+    } else {
+      el.style.display = 'none';
+      this.state.expandedQuizzes.delete(quizId);
+    }
+  },
+
   renderAdminContentTree() {
     const container = document.getElementById('admin-content-tree');
     if (!container) return;
 
+    if (!this.state.expandedQuizzes) this.state.expandedQuizzes = new Set();
     const { courses, chapters, quizzes, questions } = this.state.contentTree;
 
     if (courses.length === 0) {
@@ -552,49 +641,122 @@ const app = {
 
       return `
         <div class="card" style="margin-bottom:20px; border-left:4px solid var(--navy);">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-            <div>
-              <span class="brand-badge">COURSE</span>
-              <h3 style="font-size:1.2rem; font-weight:800; color:var(--navy); display:inline; margin-left:8px;">${c.name}</h3>
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              ${c.image_url ? `<img src="${c.image_url}" style="width:46px; height:46px; object-fit:cover; border-radius:8px; border:1px solid var(--border);" alt="${this.escapeHtml(c.name)}">` : ''}
+              <div>
+                <span class="brand-badge">COURSE</span>
+                <h3 style="font-size:1.25rem; font-weight:800; color:var(--navy); display:inline; margin-left:6px;">${this.escapeHtml(c.name)}</h3>
+              </div>
             </div>
-            <button class="btn btn-secondary btn-sm" onclick="app.openAddChapterModal('${c.id}')">+ Add Chapter to ${c.name}</button>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+              <button class="btn btn-secondary btn-sm" onclick="app.openAddChapterModal('${c.id}')">+ Add Chapter</button>
+              <button class="btn btn-outline btn-sm" onclick="app.openEditCourseModal('${c.id}')" title="Edit Course">✏️ Edit</button>
+              <button class="btn btn-danger btn-sm" onclick="app.handleDeleteCourse('${c.id}')" title="Delete Course">🗑️ Delete</button>
+            </div>
           </div>
-          <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:16px;">${c.description || 'No description'}</p>
+          <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:16px;">${this.escapeHtml(c.description || 'No description provided.')}</p>
 
           <!-- CHAPTERS UNDER THIS COURSE -->
           <div style="padding-left:16px; border-left:2px solid var(--border);">
             ${courseChapters.length === 0 ? `
-              <div style="font-size:0.85rem; color:var(--text-muted);">No chapters under this course yet.</div>
+              <div style="font-size:0.85rem; color:var(--text-muted); padding:8px 0;">No chapters under this course yet. Click "+ Add Chapter" to create one.</div>
             ` : courseChapters.map(ch => {
               const chapterQuizzes = quizzes.filter(q => q.chapter_id === ch.id);
 
               return `
-                <div style="background:var(--bg-main); padding:16px; border-radius:8px; margin-bottom:12px; border:1px solid var(--border);">
-                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                    <div>
-                      <span class="brand-badge" style="background:var(--blue);">CHAPTER</span>
-                      <strong style="color:var(--navy); font-size:1rem; margin-left:6px;">${ch.name}</strong>
+                <div style="background:var(--bg-main); padding:16px; border-radius:8px; margin-bottom:14px; border:1px solid var(--border);">
+                  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:8px;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                      ${ch.image_url ? `<img src="${ch.image_url}" style="width:38px; height:38px; object-fit:cover; border-radius:6px; border:1px solid var(--border);" alt="${this.escapeHtml(ch.name)}">` : ''}
+                      <div>
+                        <span class="brand-badge" style="background:var(--blue);">CHAPTER</span>
+                        <strong style="color:var(--navy); font-size:1.05rem; margin-left:6px;">${this.escapeHtml(ch.name)}</strong>
+                      </div>
                     </div>
-                    <button class="btn btn-secondary btn-sm" onclick="app.openAddQuizModal('${c.id}', '${ch.id}')">+ Add Quiz to Chapter</button>
+                    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                      <button class="btn btn-secondary btn-sm" onclick="app.openAddQuizModal('${c.id}', '${ch.id}')">+ Add Quiz</button>
+                      <button class="btn btn-outline btn-sm" onclick="app.openEditChapterModal('${ch.id}')" title="Edit Chapter">✏️ Edit</button>
+                      <button class="btn btn-danger btn-sm" onclick="app.handleDeleteChapter('${ch.id}')" title="Delete Chapter">🗑️ Delete</button>
+                    </div>
                   </div>
-                  <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">${ch.description || ''}</p>
+                  <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">${this.escapeHtml(ch.description || '')}</p>
 
                   <!-- QUIZZES UNDER THIS CHAPTER -->
-                  <div style="padding-left:16px;">
+                  <div style="padding-left:12px;">
                     ${chapterQuizzes.length === 0 ? `
-                      <div style="font-size:0.8rem; color:var(--text-muted);">No quizzes in this chapter.</div>
+                      <div style="font-size:0.8rem; color:var(--text-muted); padding:6px 0;">No quizzes in this chapter yet. Click "+ Add Quiz" to create one.</div>
                     ` : chapterQuizzes.map(q => {
                       const quizQuestions = questions.filter(quest => quest.quiz_id === q.id);
+                      const isExpanded = this.state.expandedQuizzes.has(q.id);
 
                       return `
-                        <div style="background:#fff; padding:12px 16px; border-radius:6px; margin-bottom:8px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
-                          <div>
-                            <strong style="color:var(--navy); font-size:0.95rem;">${q.title}</strong>
-                            <div style="font-size:0.8rem; color:var(--text-muted); margin-top:2px;">
-                              ⏱️ ${q.time_limit} Mins • 🎯 Quiz Configured Question Count: <strong>${q.question_count}</strong> • 📚 Bank Total: <strong>${quizQuestions.length} Questions</strong>
+                        <div style="background:#fff; padding:12px 16px; border-radius:8px; margin-bottom:10px; border:1px solid var(--border);">
+                          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                            <div>
+                              <strong style="color:var(--navy); font-size:1rem;">${this.escapeHtml(q.title)}</strong>
+                              <div style="font-size:0.82rem; color:var(--text-muted); margin-top:3px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+                                <span>⏱️ ${q.time_limit} Mins</span> • 
+                                <span>🎯 Serves: <strong>${q.question_count} Qs</strong></span> • 
+                                <span>📚 Bank: <strong>${quizQuestions.length} Questions</strong></span> • 
+                                <span class="brand-badge" style="font-size:0.72rem; padding:1px 6px;">${q.difficulty}</span>
+                              </div>
+                            </div>
+                            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                              <button class="btn btn-secondary btn-sm" onclick="app.toggleQuestionsList('${q.id}')">
+                                👁️ Questions (${quizQuestions.length})
+                              </button>
+                              <button class="btn btn-success btn-sm" onclick="app.openAddQuestionModal('${c.id}', '${ch.id}', '${q.id}')">
+                                + Add Q
+                              </button>
+                              <button class="btn btn-outline btn-sm" onclick="app.openEditQuizModal('${q.id}')" title="Edit Quiz">
+                                ✏️ Edit
+                              </button>
+                              <button class="btn btn-danger btn-sm" onclick="app.handleDeleteQuiz('${q.id}')" title="Delete Quiz">
+                                🗑️
+                              </button>
                             </div>
                           </div>
-                          <button class="btn btn-success btn-sm" onclick="app.openAddQuestionModal('${c.id}', '${ch.id}', '${q.id}')">+ Add Question to Quiz</button>
+
+                          <!-- COLLAPSIBLE QUESTION BANK LIST -->
+                          <div id="quiz-questions-${q.id}" style="display:${isExpanded ? 'block' : 'none'}; margin-top:14px; padding-top:14px; border-top:1px dashed var(--border);">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                              <span style="font-size:0.85rem; font-weight:700; color:var(--navy);">Question Bank (${quizQuestions.length} Questions)</span>
+                              <button class="btn btn-success btn-sm" onclick="app.openAddQuestionModal('${c.id}', '${ch.id}', '${q.id}')">+ Add Question to Bank</button>
+                            </div>
+                            ${quizQuestions.length === 0 ? `
+                              <p style="font-size:0.85rem; color:var(--text-muted); margin:0; padding:8px 0;">No questions added to this quiz bank yet.</p>
+                            ` : quizQuestions.map((quest, idx) => `
+                              <div style="background:var(--bg-main); padding:10px 14px; border-radius:6px; margin-bottom:8px; border:1px solid var(--border);">
+                                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+                                  <div style="flex:1;">
+                                    <div style="font-size:0.9rem; font-weight:600; color:var(--navy); margin-bottom:6px;">
+                                      <strong>${idx + 1}.</strong> ${this.escapeHtml(quest.question_text)}
+                                    </div>
+                                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:6px; font-size:0.82rem; margin-bottom:6px;">
+                                      <div style="${quest.correct_answer === 'A' ? 'font-weight:700; color:var(--green); background:var(--green-soft); padding:3px 8px; border-radius:4px;' : 'color:var(--text-muted); padding:3px 8px;'}">
+                                        <strong>A:</strong> ${this.escapeHtml(quest.option_a)} ${quest.correct_answer === 'A' ? '✓ (Correct)' : ''}
+                                      </div>
+                                      <div style="${quest.correct_answer === 'B' ? 'font-weight:700; color:var(--green); background:var(--green-soft); padding:3px 8px; border-radius:4px;' : 'color:var(--text-muted); padding:3px 8px;'}">
+                                        <strong>B:</strong> ${this.escapeHtml(quest.option_b)} ${quest.correct_answer === 'B' ? '✓ (Correct)' : ''}
+                                      </div>
+                                      <div style="${quest.correct_answer === 'C' ? 'font-weight:700; color:var(--green); background:var(--green-soft); padding:3px 8px; border-radius:4px;' : 'color:var(--text-muted); padding:3px 8px;'}">
+                                        <strong>C:</strong> ${this.escapeHtml(quest.option_c)} ${quest.correct_answer === 'C' ? '✓ (Correct)' : ''}
+                                      </div>
+                                      <div style="${quest.correct_answer === 'D' ? 'font-weight:700; color:var(--green); background:var(--green-soft); padding:3px 8px; border-radius:4px;' : 'color:var(--text-muted); padding:3px 8px;'}">
+                                        <strong>D:</strong> ${this.escapeHtml(quest.option_d)} ${quest.correct_answer === 'D' ? '✓ (Correct)' : ''}
+                                      </div>
+                                    </div>
+                                    ${quest.explanation ? `<div style="font-size:0.8rem; color:var(--navy); font-style:italic; background:#fff; padding:4px 8px; border-radius:4px; border:1px solid var(--border);">💡 <strong>Explanation:</strong> ${this.escapeHtml(quest.explanation)}</div>` : ''}
+                                  </div>
+                                  <div style="display:flex; gap:6px; flex-shrink:0;">
+                                    <button class="btn btn-outline btn-sm" style="padding:4px 8px; font-size:0.8rem;" onclick="app.openEditQuestionModal('${quest.id}')" title="Edit Question">✏️ Edit</button>
+                                    <button class="btn btn-danger btn-sm" style="padding:4px 8px; font-size:0.8rem;" onclick="app.handleDeleteQuestion('${quest.id}')" title="Delete Question">🗑️</button>
+                                  </div>
+                                </div>
+                              </div>
+                            `).join('')}
+                          </div>
                         </div>
                       `;
                     }).join('')}
@@ -608,7 +770,9 @@ const app = {
     }).join('');
   },
 
-  // ADMIN CONTENT CREATION MODALS WITH CASCADING DROPDOWNS
+  // ==========================================
+  // COURSE MODALS & CRUD
+  // ==========================================
   openAddCourseModal() {
     const modal = document.getElementById('modal-container');
     const modalBody = document.getElementById('modal-body');
@@ -628,11 +792,19 @@ const app = {
           </div>
           <div class="form-group">
             <label class="form-label">Description</label>
-            <textarea id="m-course-desc" class="form-input" rows="3" placeholder="Course description..."></textarea>
+            <textarea id="m-course-desc" class="form-input" rows="3" placeholder="Course overview and syllabus..."></textarea>
           </div>
           <div class="form-group">
-            <label class="form-label">Image URL</label>
-            <input type="text" id="m-course-img" class="form-input" placeholder="https://images.unsplash.com/...">
+            <label class="form-label" style="font-weight:700;">Course Cover Image (Upload or URL)</label>
+            <div style="background:var(--bg-main); padding:12px; border-radius:8px; border:1.5px dashed var(--blue);">
+              <label style="display:block; font-size:0.85rem; font-weight:600; color:var(--navy); margin-bottom:6px;">
+                📁 Choose Image from Device (PC/Phone):
+              </label>
+              <input type="file" id="m-course-file" class="form-input" accept="image/*" onchange="app.handleImageFileInput(this, 'm-course-img', 'm-course-preview')">
+              <div style="text-align:center; font-size:0.8rem; color:var(--text-muted); margin:8px 0;">— OR PASTE IMAGE URL —</div>
+              <input type="text" id="m-course-img" class="form-input" placeholder="https://images.unsplash.com/..." oninput="app.updateImagePreview(this.value, 'm-course-preview')">
+              <div id="m-course-preview" style="display:none;"></div>
+            </div>
           </div>
         </form>
       </div>
@@ -663,6 +835,101 @@ const app = {
     }
   },
 
+  openEditCourseModal(courseId) {
+    const course = this.state.contentTree.courses.find(c => c.id === courseId);
+    if (!course) {
+      alert('Course not found.');
+      return;
+    }
+
+    const modal = document.getElementById('modal-container');
+    const modalBody = document.getElementById('modal-body');
+    modalBody.className = 'modal-content';
+
+    modalBody.innerHTML = `
+      <div class="modal-header">
+        <h3>Edit Course: ${this.escapeHtml(course.name)}</h3>
+        <button type="button" class="modal-close-btn" onclick="app.closeModal()" title="Close (Esc)">✕</button>
+      </div>
+
+      <div class="modal-body-scroll">
+        <form id="form-edit-course" onsubmit="app.handleUpdateCourse(event, '${course.id}')">
+          <div class="form-group">
+            <label class="form-label">Course Name</label>
+            <input type="text" id="m-edit-course-name" class="form-input" value="${this.escapeHtml(course.name)}" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Description</label>
+            <textarea id="m-edit-course-desc" class="form-input" rows="3">${this.escapeHtml(course.description || '')}</textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="font-weight:700;">Course Cover Image (Upload or URL)</label>
+            <div style="background:var(--bg-main); padding:12px; border-radius:8px; border:1.5px dashed var(--blue);">
+              <label style="display:block; font-size:0.85rem; font-weight:600; color:var(--navy); margin-bottom:6px;">
+                📁 Choose New Image from Device:
+              </label>
+              <input type="file" id="m-edit-course-file" class="form-input" accept="image/*" onchange="app.handleImageFileInput(this, 'm-edit-course-img', 'm-edit-course-preview')">
+              <div style="text-align:center; font-size:0.8rem; color:var(--text-muted); margin:8px 0;">— OR PASTE IMAGE URL —</div>
+              <input type="text" id="m-edit-course-img" class="form-input" value="${this.escapeHtml(course.image_url || '')}" placeholder="https://..." oninput="app.updateImagePreview(this.value, 'm-edit-course-preview')">
+              <div id="m-edit-course-preview">
+                ${course.image_url ? `
+                  <div style="position:relative; display:inline-block; margin-top:8px;">
+                    <img src="${course.image_url}" alt="Preview" style="max-height:110px; max-width:100%; border-radius:8px; border:2px solid var(--blue); object-fit:cover; display:block;">
+                    <span style="font-size:0.75rem; color:var(--green); font-weight:700; margin-top:4px; display:block;">Current cover image</span>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="app.closeModal()">Cancel</button>
+        <button type="submit" form="form-edit-course" class="btn btn-primary">Update Course</button>
+      </div>
+    `;
+
+    modal.style.display = 'flex';
+  },
+
+  async handleUpdateCourse(e, courseId) {
+    e.preventDefault();
+    const name = document.getElementById('m-edit-course-name').value;
+    const description = document.getElementById('m-edit-course-desc').value;
+    const imageUrl = document.getElementById('m-edit-course-img').value;
+
+    try {
+      await API.updateCourse(courseId, { name, description, imageUrl, status: 'ACTIVE' });
+      this.closeModal();
+      await this.loadCourses();
+      await this.loadAdminContentTree();
+      alert('Course updated successfully!');
+    } catch (err) {
+      alert('Error updating course: ' + err.message);
+    }
+  },
+
+  async handleDeleteCourse(courseId) {
+    const course = this.state.contentTree.courses.find(c => c.id === courseId);
+    const courseName = course ? course.name : 'this course';
+    if (!confirm(`Are you sure you want to delete course "${courseName}" and ALL its chapters, quizzes, and questions? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await API.deleteCourse(courseId);
+      await this.loadCourses();
+      await this.loadAdminContentTree();
+      alert('Course deleted successfully.');
+    } catch (err) {
+      alert('Error deleting course: ' + err.message);
+    }
+  },
+
+  // ==========================================
+  // CHAPTER MODALS & CRUD
+  // ==========================================
   openAddChapterModal(preselectedCourseId = null) {
     const modal = document.getElementById('modal-container');
     const modalBody = document.getElementById('modal-body');
@@ -689,7 +956,19 @@ const app = {
           </div>
           <div class="form-group">
             <label class="form-label">Description</label>
-            <textarea id="m-chap-desc" class="form-input" rows="2" placeholder="Chapter overview..."></textarea>
+            <textarea id="m-chap-desc" class="form-input" rows="2" placeholder="Chapter overview and topics covered..."></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="font-weight:700;">Chapter Cover Image (Upload or URL)</label>
+            <div style="background:var(--bg-main); padding:12px; border-radius:8px; border:1.5px dashed var(--blue);">
+              <label style="display:block; font-size:0.85rem; font-weight:600; color:var(--navy); margin-bottom:6px;">
+                📁 Choose Image from Device:
+              </label>
+              <input type="file" id="m-chap-file" class="form-input" accept="image/*" onchange="app.handleImageFileInput(this, 'm-chap-img', 'm-chap-preview')">
+              <div style="text-align:center; font-size:0.8rem; color:var(--text-muted); margin:8px 0;">— OR PASTE IMAGE URL —</div>
+              <input type="text" id="m-chap-img" class="form-input" placeholder="https://images.unsplash.com/..." oninput="app.updateImagePreview(this.value, 'm-chap-preview')">
+              <div id="m-chap-preview" style="display:none;"></div>
+            </div>
           </div>
         </form>
       </div>
@@ -708,9 +987,10 @@ const app = {
     const courseId = document.getElementById('m-chap-course').value;
     const name = document.getElementById('m-chap-name').value;
     const description = document.getElementById('m-chap-desc').value;
+    const imageUrl = document.getElementById('m-chap-img').value;
 
     try {
-      await API.createChapter({ courseId, name, description });
+      await API.createChapter({ courseId, name, description, imageUrl });
       this.closeModal();
       await this.loadAdminContentTree();
       alert('Chapter created successfully!');
@@ -719,6 +999,104 @@ const app = {
     }
   },
 
+  openEditChapterModal(chapterId) {
+    const chapter = this.state.contentTree.chapters.find(ch => ch.id === chapterId);
+    if (!chapter) {
+      alert('Chapter not found.');
+      return;
+    }
+
+    const modal = document.getElementById('modal-container');
+    const modalBody = document.getElementById('modal-body');
+    modalBody.className = 'modal-content';
+
+    modalBody.innerHTML = `
+      <div class="modal-header">
+        <h3>Edit Chapter: ${this.escapeHtml(chapter.name)}</h3>
+        <button type="button" class="modal-close-btn" onclick="app.closeModal()" title="Close (Esc)">✕</button>
+      </div>
+
+      <div class="modal-body-scroll">
+        <form id="form-edit-chapter" onsubmit="app.handleUpdateChapter(event, '${chapter.id}')">
+          <div class="form-group">
+            <label class="form-label">Chapter Name</label>
+            <input type="text" id="m-edit-chap-name" class="form-input" value="${this.escapeHtml(chapter.name)}" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Description</label>
+            <textarea id="m-edit-chap-desc" class="form-input" rows="2">${this.escapeHtml(chapter.description || '')}</textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Chapter Order Index</label>
+            <input type="number" id="m-edit-chap-order" class="form-input" value="${chapter.chapter_order || 1}" min="1">
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="font-weight:700;">Chapter Cover Image (Upload or URL)</label>
+            <div style="background:var(--bg-main); padding:12px; border-radius:8px; border:1.5px dashed var(--blue);">
+              <label style="display:block; font-size:0.85rem; font-weight:600; color:var(--navy); margin-bottom:6px;">
+                📁 Choose New Image from Device:
+              </label>
+              <input type="file" id="m-edit-chap-file" class="form-input" accept="image/*" onchange="app.handleImageFileInput(this, 'm-edit-chap-img', 'm-edit-chap-preview')">
+              <div style="text-align:center; font-size:0.8rem; color:var(--text-muted); margin:8px 0;">— OR PASTE IMAGE URL —</div>
+              <input type="text" id="m-edit-chap-img" class="form-input" value="${this.escapeHtml(chapter.image_url || '')}" placeholder="https://..." oninput="app.updateImagePreview(this.value, 'm-edit-chap-preview')">
+              <div id="m-edit-chap-preview">
+                ${chapter.image_url ? `
+                  <div style="position:relative; display:inline-block; margin-top:8px;">
+                    <img src="${chapter.image_url}" alt="Preview" style="max-height:110px; max-width:100%; border-radius:8px; border:2px solid var(--blue); object-fit:cover; display:block;">
+                    <span style="font-size:0.75rem; color:var(--green); font-weight:700; margin-top:4px; display:block;">Current cover image</span>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="app.closeModal()">Cancel</button>
+        <button type="submit" form="form-edit-chapter" class="btn btn-primary">Update Chapter</button>
+      </div>
+    `;
+
+    modal.style.display = 'flex';
+  },
+
+  async handleUpdateChapter(e, chapterId) {
+    e.preventDefault();
+    const name = document.getElementById('m-edit-chap-name').value;
+    const description = document.getElementById('m-edit-chap-desc').value;
+    const chapterOrder = document.getElementById('m-edit-chap-order').value;
+    const imageUrl = document.getElementById('m-edit-chap-img').value;
+
+    try {
+      await API.updateChapter(chapterId, { name, description, chapterOrder, imageUrl, status: 'ACTIVE' });
+      this.closeModal();
+      await this.loadAdminContentTree();
+      alert('Chapter updated successfully!');
+    } catch (err) {
+      alert('Error updating chapter: ' + err.message);
+    }
+  },
+
+  async handleDeleteChapter(chapterId) {
+    const chapter = this.state.contentTree.chapters.find(ch => ch.id === chapterId);
+    const chapterName = chapter ? chapter.name : 'this chapter';
+    if (!confirm(`Are you sure you want to delete chapter "${chapterName}" and all its quizzes? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await API.deleteChapter(chapterId);
+      await this.loadAdminContentTree();
+      alert('Chapter deleted successfully.');
+    } catch (err) {
+      alert('Error deleting chapter: ' + err.message);
+    }
+  },
+
+  // ==========================================
+  // QUIZ MODALS & CRUD
+  // ==========================================
   openAddQuizModal(preselectedCourseId = null, preselectedChapterId = null) {
     const modal = document.getElementById('modal-container');
     const modalBody = document.getElementById('modal-body');
@@ -815,6 +1193,105 @@ const app = {
     }
   },
 
+  openEditQuizModal(quizId) {
+    const quiz = this.state.contentTree.quizzes.find(q => q.id === quizId);
+    if (!quiz) {
+      alert('Quiz not found.');
+      return;
+    }
+
+    const modal = document.getElementById('modal-container');
+    const modalBody = document.getElementById('modal-body');
+    modalBody.className = 'modal-content';
+
+    modalBody.innerHTML = `
+      <div class="modal-header">
+        <h3>Edit Quiz: ${this.escapeHtml(quiz.title)}</h3>
+        <button type="button" class="modal-close-btn" onclick="app.closeModal()" title="Close (Esc)">✕</button>
+      </div>
+
+      <div class="modal-body-scroll">
+        <form id="form-edit-quiz" onsubmit="app.handleUpdateQuiz(event, '${quiz.id}')">
+          <div class="form-group">
+            <label class="form-label">Quiz Title</label>
+            <input type="text" id="m-edit-quiz-title" class="form-input" value="${this.escapeHtml(quiz.title)}" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Description (Optional)</label>
+            <textarea id="m-edit-quiz-desc" class="form-input" rows="2">${this.escapeHtml(quiz.description || '')}</textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">How Many Questions Should Each Quiz Have? (Served to Student)</label>
+            <input type="number" id="m-edit-quiz-qcount" class="form-input" value="${quiz.question_count || 10}" min="1" max="100" required>
+            <span style="font-size:0.75rem; color:var(--text-muted);">Admin can add as many questions to the bank as desired; this setting decides how many questions are served during a quiz attempt.</span>
+          </div>
+
+          <div class="grid-2-compact">
+            <div class="form-group">
+              <label class="form-label">Time Limit (Minutes)</label>
+              <input type="number" id="m-edit-quiz-timelimit" class="form-input" value="${quiz.time_limit || 15}" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Difficulty</label>
+              <select id="m-edit-quiz-diff" class="form-input">
+                <option value="Easy" ${quiz.difficulty === 'Easy' ? 'selected' : ''}>Easy</option>
+                <option value="Medium" ${quiz.difficulty === 'Medium' ? 'selected' : ''}>Medium</option>
+                <option value="Hard" ${quiz.difficulty === 'Hard' ? 'selected' : ''}>Hard</option>
+              </select>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="app.closeModal()">Cancel</button>
+        <button type="submit" form="form-edit-quiz" class="btn btn-primary">Update Quiz</button>
+      </div>
+    `;
+
+    modal.style.display = 'flex';
+  },
+
+  async handleUpdateQuiz(e, quizId) {
+    e.preventDefault();
+    const title = document.getElementById('m-edit-quiz-title').value;
+    const description = document.getElementById('m-edit-quiz-desc').value;
+    const questionCount = parseInt(document.getElementById('m-edit-quiz-qcount').value);
+    const timeLimit = parseInt(document.getElementById('m-edit-quiz-timelimit').value);
+    const difficulty = document.getElementById('m-edit-quiz-diff').value;
+
+    try {
+      await API.updateQuiz(quizId, { title, description, questionCount, timeLimit, difficulty, status: 'ACTIVE' });
+      this.closeModal();
+      await this.loadAdminContentTree();
+      alert('Quiz updated successfully!');
+    } catch (err) {
+      alert('Error updating quiz: ' + err.message);
+    }
+  },
+
+  async handleDeleteQuiz(quizId) {
+    const quiz = this.state.contentTree.quizzes.find(q => q.id === quizId);
+    const quizTitle = quiz ? quiz.title : 'this quiz';
+    if (!confirm(`Are you sure you want to delete quiz "${quizTitle}" and all its questions? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await API.deleteQuiz(quizId);
+      await this.loadAdminContentTree();
+      alert('Quiz deleted successfully.');
+    } catch (err) {
+      alert('Error deleting quiz: ' + err.message);
+    }
+  },
+
+  // ==========================================
+  // QUESTION MODALS & CRUD
+  // ==========================================
   openAddQuestionModal(preselectedCourseId = null, preselectedChapterId = null, preselectedQuizId = null) {
     const modal = document.getElementById('modal-container');
     const modalBody = document.getElementById('modal-body');
@@ -984,9 +1461,13 @@ const app = {
     }
 
     try {
-      const res = await API.createQuestion({
+      await API.createQuestion({
         quizId, questionText, optionA, optionB, optionC, optionD, correctAnswer, explanation
       });
+
+      // Ensure this quiz remains expanded
+      if (!this.state.expandedQuizzes) this.state.expandedQuizzes = new Set();
+      this.state.expandedQuizzes.add(quizId);
 
       // Update background content tree
       await this.loadAdminContentTree();
@@ -1013,6 +1494,128 @@ const app = {
       } else {
         alert('Error adding question: ' + err.message);
       }
+    }
+  },
+
+  openEditQuestionModal(questionId) {
+    const quest = this.state.contentTree.questions.find(q => q.id === questionId);
+    if (!quest) {
+      alert('Question not found.');
+      return;
+    }
+
+    const modal = document.getElementById('modal-container');
+    const modalBody = document.getElementById('modal-body');
+    modalBody.className = 'modal-content modal-content-lg';
+
+    modalBody.innerHTML = `
+      <div class="modal-header">
+        <div>
+          <h3>Edit MCQ Question</h3>
+          <span style="color:var(--text-muted); font-size:0.8rem;">Update question statement, choices, or explanation.</span>
+        </div>
+        <button type="button" class="modal-close-btn" onclick="app.closeModal()" title="Close (Esc)">✕</button>
+      </div>
+
+      <div class="modal-body-scroll">
+        <div id="m-edit-q-error" style="background:var(--red-soft); color:var(--red); padding:10px 14px; border-radius:6px; font-size:0.88rem; margin-bottom:12px; display:none; border:1px solid var(--red);"></div>
+
+        <form id="form-edit-question" onsubmit="app.handleUpdateQuestion(event, '${quest.id}')">
+          <div class="form-group" style="margin-bottom:12px;">
+            <label class="form-label" style="font-size:0.85rem;">Question Statement</label>
+            <textarea id="m-edit-q-text" class="form-input" rows="2" style="padding:8px 12px; font-size:0.9rem;" required>${this.escapeHtml(quest.question_text)}</textarea>
+          </div>
+
+          <div class="grid-2-compact" style="margin-bottom:12px;">
+            <div>
+              <div class="form-group" style="margin-bottom:10px;">
+                <label class="form-label" style="font-size:0.8rem; color:var(--blue);">Option A</label>
+                <input type="text" id="m-edit-q-opta" class="form-input" style="padding:6px 10px; font-size:0.88rem;" value="${this.escapeHtml(quest.option_a)}" required>
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label" style="font-size:0.8rem; color:var(--blue);">Option B</label>
+                <input type="text" id="m-edit-q-optb" class="form-input" style="padding:6px 10px; font-size:0.88rem;" value="${this.escapeHtml(quest.option_b)}" required>
+              </div>
+            </div>
+
+            <div>
+              <div class="form-group" style="margin-bottom:10px;">
+                <label class="form-label" style="font-size:0.8rem; color:var(--blue);">Option C</label>
+                <input type="text" id="m-edit-q-optc" class="form-input" style="padding:6px 10px; font-size:0.88rem;" value="${this.escapeHtml(quest.option_c)}" required>
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label" style="font-size:0.8rem; color:var(--blue);">Option D</label>
+                <input type="text" id="m-edit-q-optd" class="form-input" style="padding:6px 10px; font-size:0.88rem;" value="${this.escapeHtml(quest.option_d)}" required>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid-2-compact" style="margin-bottom:0;">
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label" style="font-size:0.8rem; color:var(--green);">Correct Answer Choice</label>
+              <select id="m-edit-q-correct" class="form-input" style="padding:6px 10px; font-size:0.88rem;" required>
+                <option value="A" ${quest.correct_answer === 'A' ? 'selected' : ''}>Option A</option>
+                <option value="B" ${quest.correct_answer === 'B' ? 'selected' : ''}>Option B</option>
+                <option value="C" ${quest.correct_answer === 'C' ? 'selected' : ''}>Option C</option>
+                <option value="D" ${quest.correct_answer === 'D' ? 'selected' : ''}>Option D</option>
+              </select>
+            </div>
+
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label" style="font-size:0.8rem;">Explanation (Optional)</label>
+              <input type="text" id="m-edit-q-exp" class="form-input" style="padding:6px 10px; font-size:0.88rem;" value="${this.escapeHtml(quest.explanation || '')}">
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="app.closeModal()">Cancel</button>
+        <button type="submit" form="form-edit-question" class="btn btn-primary">Update Question 💾</button>
+      </div>
+    `;
+
+    modal.style.display = 'flex';
+  },
+
+  async handleUpdateQuestion(e, questionId) {
+    e.preventDefault();
+    const errorEl = document.getElementById('m-edit-q-error');
+    if (errorEl) errorEl.style.display = 'none';
+
+    const questionText = document.getElementById('m-edit-q-text').value;
+    const optionA = document.getElementById('m-edit-q-opta').value;
+    const optionB = document.getElementById('m-edit-q-optb').value;
+    const optionC = document.getElementById('m-edit-q-optc').value;
+    const optionD = document.getElementById('m-edit-q-optd').value;
+    const correctAnswer = document.getElementById('m-edit-q-correct').value;
+    const explanation = document.getElementById('m-edit-q-exp').value;
+
+    try {
+      await API.updateQuestion(questionId, {
+        questionText, optionA, optionB, optionC, optionD, correctAnswer, explanation
+      });
+      this.closeModal();
+      await this.loadAdminContentTree();
+    } catch (err) {
+      if (errorEl) {
+        errorEl.innerText = 'Failed to update question: ' + err.message;
+        errorEl.style.display = 'block';
+      } else {
+        alert('Error updating question: ' + err.message);
+      }
+    }
+  },
+
+  async handleDeleteQuestion(questionId) {
+    if (!confirm('Are you sure you want to delete this question from the quiz bank?')) {
+      return;
+    }
+    try {
+      await API.deleteQuestion(questionId);
+      await this.loadAdminContentTree();
+    } catch (err) {
+      alert('Failed to delete question: ' + err.message);
     }
   },
 

@@ -606,10 +606,18 @@ app.post('/api/admin/courses', authenticateToken, requireAdmin, (req, res) => {
 app.put('/api/admin/courses/:id', authenticateToken, requireAdmin, (req, res) => {
   const { name, description, imageUrl, status } = req.body;
   try {
-    db.prepare('UPDATE courses SET name = ?, description = ?, image_url = ?, status = ? WHERE id = ?').run(name, description, imageUrl, status, req.params.id);
+    const existing = db.prepare('SELECT * FROM courses WHERE id = ?').get(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Course not found.' });
+    db.prepare('UPDATE courses SET name = ?, description = ?, image_url = ?, status = ? WHERE id = ?').run(
+      name || existing.name,
+      description !== undefined ? description : existing.description,
+      imageUrl !== undefined ? imageUrl : existing.image_url,
+      status || existing.status || 'ACTIVE',
+      req.params.id
+    );
     res.json({ message: 'Course updated successfully.' });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to update course.' });
+    res.status(500).json({ error: 'Failed to update course: ' + err.message });
   }
 });
 
@@ -639,10 +647,19 @@ app.post('/api/admin/chapters', authenticateToken, requireAdmin, (req, res) => {
 app.put('/api/admin/chapters/:id', authenticateToken, requireAdmin, (req, res) => {
   const { name, description, imageUrl, chapterOrder, status } = req.body;
   try {
-    db.prepare('UPDATE chapters SET name = ?, description = ?, image_url = ?, chapter_order = ?, status = ? WHERE id = ?').run(name, description, imageUrl, chapterOrder, status, req.params.id);
+    const existing = db.prepare('SELECT * FROM chapters WHERE id = ?').get(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Chapter not found.' });
+    db.prepare('UPDATE chapters SET name = ?, description = ?, image_url = ?, chapter_order = ?, status = ? WHERE id = ?').run(
+      name || existing.name,
+      description !== undefined ? description : existing.description,
+      imageUrl !== undefined ? imageUrl : existing.image_url,
+      chapterOrder !== undefined && chapterOrder !== '' ? parseInt(chapterOrder) : existing.chapter_order,
+      status || existing.status || 'ACTIVE',
+      req.params.id
+    );
     res.json({ message: 'Chapter updated successfully.' });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to update chapter.' });
+    res.status(500).json({ error: 'Failed to update chapter: ' + err.message });
   }
 });
 
@@ -661,7 +678,7 @@ app.get('/api/admin/content-tree', authenticateToken, requireAdmin, (req, res) =
     const courses = db.prepare("SELECT * FROM courses ORDER BY created_at ASC").all();
     const chapters = db.prepare("SELECT * FROM chapters ORDER BY chapter_order ASC, created_at ASC").all();
     const quizzes = db.prepare("SELECT * FROM quizzes ORDER BY created_at ASC").all();
-    const questions = db.prepare("SELECT id, quiz_id, question_text, option_a, option_b, option_c, option_d, correct_answer, explanation FROM questions").all();
+    const questions = db.prepare("SELECT id, quiz_id, question_text, image_url, option_a, option_b, option_c, option_d, correct_answer, explanation FROM questions").all();
 
     res.json({ courses, chapters, quizzes, questions });
   } catch (err) {
@@ -686,10 +703,20 @@ app.post('/api/admin/quizzes', authenticateToken, requireAdmin, (req, res) => {
 app.put('/api/admin/quizzes/:id', authenticateToken, requireAdmin, (req, res) => {
   const { title, description, questionCount, timeLimit, difficulty, status } = req.body;
   try {
-    db.prepare('UPDATE quizzes SET title = ?, description = ?, question_count = ?, time_limit = ?, difficulty = ?, status = ? WHERE id = ?').run(title, description, questionCount || 10, timeLimit, difficulty, status, req.params.id);
+    const existing = db.prepare('SELECT * FROM quizzes WHERE id = ?').get(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Quiz not found.' });
+    db.prepare('UPDATE quizzes SET title = ?, description = ?, question_count = ?, time_limit = ?, difficulty = ?, status = ? WHERE id = ?').run(
+      title || existing.title,
+      description !== undefined ? description : existing.description,
+      questionCount ? parseInt(questionCount) : existing.question_count,
+      timeLimit ? parseInt(timeLimit) : existing.time_limit,
+      difficulty || existing.difficulty,
+      status || existing.status || 'ACTIVE',
+      req.params.id
+    );
     res.json({ message: 'Quiz updated successfully.' });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to update quiz.' });
+    res.status(500).json({ error: 'Failed to update quiz: ' + err.message });
   }
 });
 
@@ -731,14 +758,26 @@ app.post('/api/admin/questions', authenticateToken, requireAdmin, (req, res) => 
 app.put('/api/admin/questions/:id', authenticateToken, requireAdmin, (req, res) => {
   const { questionText, imageUrl, optionA, optionB, optionC, optionD, correctAnswer, explanation } = req.body;
   try {
+    const existing = db.prepare('SELECT * FROM questions WHERE id = ?').get(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Question not found.' });
     db.prepare(`
       UPDATE questions
       SET question_text = ?, image_url = ?, option_a = ?, option_b = ?, option_c = ?, option_d = ?, correct_answer = ?, explanation = ?
       WHERE id = ?
-    `).run(questionText, imageUrl, optionA, optionB, optionC, optionD, correctAnswer.toUpperCase(), explanation, req.params.id);
+    `).run(
+      questionText || existing.question_text,
+      imageUrl !== undefined ? imageUrl : existing.image_url,
+      optionA || existing.option_a,
+      optionB || existing.option_b,
+      optionC || existing.option_c,
+      optionD || existing.option_d,
+      (correctAnswer || existing.correct_answer).toUpperCase(),
+      explanation !== undefined ? explanation : existing.explanation,
+      req.params.id
+    );
     res.json({ message: 'Question updated successfully.' });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to update question.' });
+    res.status(500).json({ error: 'Failed to update question: ' + err.message });
   }
 });
 

@@ -146,10 +146,36 @@ const API = {
     });
   },
 
+  async updateCourse(id, courseData) {
+    return await this.request(`/admin/courses/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(courseData)
+    });
+  },
+
+  async deleteCourse(id) {
+    return await this.request(`/admin/courses/${id}`, {
+      method: 'DELETE'
+    });
+  },
+
   async createChapter(chapterData) {
     return await this.request('/admin/chapters', {
       method: 'POST',
       body: JSON.stringify(chapterData)
+    });
+  },
+
+  async updateChapter(id, chapterData) {
+    return await this.request(`/admin/chapters/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(chapterData)
+    });
+  },
+
+  async deleteChapter(id) {
+    return await this.request(`/admin/chapters/${id}`, {
+      method: 'DELETE'
     });
   },
 
@@ -160,10 +186,36 @@ const API = {
     });
   },
 
+  async updateQuiz(id, quizData) {
+    return await this.request(`/admin/quizzes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(quizData)
+    });
+  },
+
+  async deleteQuiz(id) {
+    return await this.request(`/admin/quizzes/${id}`, {
+      method: 'DELETE'
+    });
+  },
+
   async createQuestion(questionData) {
     return await this.request('/admin/questions', {
       method: 'POST',
       body: JSON.stringify(questionData)
+    });
+  },
+
+  async updateQuestion(id, questionData) {
+    return await this.request(`/admin/questions/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(questionData)
+    });
+  },
+
+  async deleteQuestion(id) {
+    return await this.request(`/admin/questions/${id}`, {
+      method: 'DELETE'
     });
   },
 

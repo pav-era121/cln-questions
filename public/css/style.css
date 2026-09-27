@@ -189,6 +189,27 @@ body {
   background-color: #B82B2B;
 }
 
+.btn-outline {
+  background-color: transparent;
+  color: var(--navy);
+  border: 1.5px solid var(--border);
+}
+
+.btn-outline:hover {
+  background-color: var(--bg-main);
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.btn-warning {
+  background-color: var(--gold);
+  color: #172033;
+}
+
+.btn-warning:hover {
+  background-color: #E09800;
+}
+
 .btn-sm {
   padding: 6px 14px;
   font-size: 0.85rem;
