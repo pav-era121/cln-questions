@@ -3,8 +3,12 @@
   "version": "1.0.0",
   "description": "CLN Questions - Ethiopian Freshman Examination Platform",
   "main": "server.js",
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
     "start": "node server.js",
+    "build": "node -v",
     "init-db": "node db/init.js",
     "seed": "node db/seed.js"
   },

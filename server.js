@@ -10,8 +10,31 @@ const { DatabaseSync } = require('node:sqlite');
 const JWT_SECRET = 'CLN_QUESTIONS_ETHIOPIA_JWT_SECRET_2026';
 const PORT = process.env.PORT || 3000;
 
-// Initialize Database Connection
-const dbPath = path.join(__dirname, 'db', 'cln.db');
+// Detect Serverless / Vercel Environment
+const isServerless = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+
+// Initialize Database Connection (supports local & Vercel serverless /tmp)
+let dbPath;
+if (isServerless) {
+  const tmpDbPath = path.join('/tmp', 'cln.db');
+  const bundledDbPath = path.join(__dirname, 'db', 'cln.db');
+  if (!fs.existsSync(tmpDbPath) && fs.existsSync(bundledDbPath)) {
+    try {
+      fs.copyFileSync(bundledDbPath, tmpDbPath);
+      console.log('Copied bundled cln.db to /tmp/cln.db');
+    } catch (e) {
+      console.warn('Failed to copy bundled db to /tmp:', e.message);
+    }
+  }
+  dbPath = fs.existsSync(tmpDbPath) ? tmpDbPath : bundledDbPath;
+} else {
+  const localDbDir = path.join(__dirname, 'db');
+  if (!fs.existsSync(localDbDir)) {
+    fs.mkdirSync(localDbDir, { recursive: true });
+  }
+  dbPath = path.join(localDbDir, 'cln.db');
+}
+
 const db = new DatabaseSync(dbPath);
 db.exec('PRAGMA foreign_keys = ON;');
 
@@ -21,10 +44,14 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Upload Directory Setup
-const uploadDir = path.join(__dirname, 'uploads');
+// Upload Directory Setup (safe for read-only serverless filesystems)
+const uploadDir = isServerless ? path.join('/tmp', 'uploads') : path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+  try {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  } catch (e) {
+    console.warn('Could not create uploadDir:', e.message);
+  }
 }
 app.use('/uploads', express.static(uploadDir));
 app.use(express.static(path.join(__dirname, 'public')));
