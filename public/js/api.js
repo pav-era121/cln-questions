@@ -43,13 +43,23 @@ const API = {
 
     try {
       const response = await fetch(`${API_BASE}${endpoint}`, config);
-      const data = await response.json();
+      const text = await response.text();
+      let data = null;
+
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch (parseErr) {
+        if (!response.ok) {
+          throw new Error(`Server returned HTTP ${response.status} (${response.statusText}).`);
+        }
+        throw new Error('Invalid response from server.');
+      }
 
       if (!response.ok) {
-        if (data.suspended) {
+        if (data && data.suspended) {
           window.dispatchEvent(new CustomEvent('cln:user-suspended', { detail: data }));
         }
-        throw new Error(data.error || 'Request failed');
+        throw new Error(data.error || `Request failed with status ${response.status}`);
       }
 
       return data;

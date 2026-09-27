@@ -563,7 +563,7 @@ const app = {
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
-        const maxDim = 800;
+        const maxDim = 480;
         let width = img.width;
         let height = img.height;
         if (width > maxDim || height > maxDim) {
@@ -582,7 +582,7 @@ const app = {
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
 
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.70);
         const targetInput = document.getElementById(targetInputId);
         if (targetInput) targetInput.value = dataUrl;
 

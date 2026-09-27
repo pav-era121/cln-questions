@@ -18,24 +18,10 @@ let dbPath;
 if (isServerless) {
   const tmpDbPath = path.join('/tmp', 'cln.db');
   const bundledDbPath = path.join(__dirname, 'db', 'cln.db');
-  let needCopy = false;
   if (!fs.existsSync(tmpDbPath)) {
-    needCopy = true;
-  } else if (fs.existsSync(bundledDbPath)) {
-    try {
-      const srcStat = fs.statSync(bundledDbPath);
-      const dstStat = fs.statSync(tmpDbPath);
-      if (srcStat.size !== dstStat.size) {
-        needCopy = true;
-      }
-    } catch (e) {
-      needCopy = true;
-    }
-  }
-  if (needCopy && fs.existsSync(bundledDbPath)) {
     try {
       fs.copyFileSync(bundledDbPath, tmpDbPath);
-      console.log('Synchronized updated bundled cln.db to /tmp/cln.db');
+      console.log('Initialized bundled cln.db to /tmp/cln.db');
     } catch (e) {
       console.warn('Failed to copy bundled db to /tmp:', e.message);
     }
@@ -55,8 +41,8 @@ db.exec('PRAGMA foreign_keys = ON;');
 const app = express();
 
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Upload Directory Setup (safe for read-only serverless filesystems)
 const uploadDir = isServerless ? path.join('/tmp', 'uploads') : path.join(__dirname, 'uploads');
@@ -804,6 +790,14 @@ app.post('/api/admin/upload', authenticateToken, requireAdmin, upload.single('im
   }
   const imageUrl = `/uploads/${req.file.filename}`;
   res.json({ imageUrl, message: 'Image uploaded successfully.' });
+});
+
+// Global Error Handling Middleware (Ensures JSON errors, prevents HTML error responses)
+app.use((err, req, res, next) => {
+  console.error('API Error:', err);
+  res.status(err.status || err.statusCode || 500).json({
+    error: err.message || 'Internal Server Error'
+  });
 });
 
 // Serve Single Page Application for any unhandled route
