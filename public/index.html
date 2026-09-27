@@ -24,7 +24,6 @@
         <li class="student-only" style="display:none;"><a class="nav-link" onclick="app.showView('dashboard')">Dashboard</a></li>
         <li class="student-only" style="display:none;"><a class="nav-link" onclick="app.showView('history')">History</a></li>
         <li class="admin-only" style="display:none;"><a class="nav-link" onclick="app.showView('admin')">Admin Panel</a></li>
-        <li><a href="https://t.me/CLN_AAU_Admin" target="_blank" rel="noopener noreferrer" class="nav-support-link" title="Contact Admin @CLN_AAU_Admin on Telegram">💬 Support</a></li>
       </ul>
 
       <div id="nav-user-area">
@@ -260,31 +259,6 @@
             <h4 style="font-weight:700; color:var(--navy); margin-bottom:4px;">Can I see my previous results and track progress?</h4>
             <p style="color:var(--text-muted); font-size:0.9rem;">Yes. Every quiz attempt is stored permanently in your history along with earned XP and score metrics.</p>
           </div>
-          <div class="card" style="margin-bottom:12px; padding:18px 24px; border-left: 4px solid #229ED9;">
-            <h4 style="font-weight:700; color:var(--navy); margin-bottom:4px;">How do I contact support or ask a question?</h4>
-            <p style="color:var(--text-muted); font-size:0.9rem;">
-              If you have any questions, encounter an issue, need course support, or have account inquiries, you can reach out directly to the admin on Telegram: 
-              <a href="https://t.me/CLN_AAU_Admin" target="_blank" rel="noopener noreferrer" style="color:#229ED9; font-weight:700; text-decoration:underline;">@CLN_AAU_Admin</a>.
-            </p>
-          </div>
-        </div>
-
-        <!-- HOME SUPPORT BANNER -->
-        <div class="support-card" style="margin-bottom: 60px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:20px;">
-            <div style="flex:1; min-width:280px;">
-              <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
-                <span style="font-size:1.4rem;">💬</span>
-                <h3 style="font-size:1.25rem; font-weight:800; color:var(--navy);">Need Help, Have a Question, or Found an Issue?</h3>
-              </div>
-              <p style="color:var(--text-muted); font-size:0.92rem; line-height:1.5;">
-                We are here to help Ethiopian freshmen succeed. If you run into technical difficulties, have academic inquiries, or need support with your account, connect directly with the administrator.
-              </p>
-            </div>
-            <a href="https://t.me/CLN_AAU_Admin" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-lg" style="background:#229ED9; border-color:#229ED9; display:inline-flex; align-items:center; gap:10px;">
-              <span>✈️</span> Contact Admin @CLN_AAU_Admin
-            </a>
-          </div>
         </div>
       </div>
     </section>
@@ -314,11 +288,6 @@
 
           <div style="text-align:center; margin-top:20px; font-size:0.9rem; color:var(--text-muted);">
             Don't have an account? <a style="color:var(--blue); font-weight:600; cursor:pointer;" onclick="app.showView('register')">Register Now</a>
-          </div>
-
-          <div style="text-align:center; margin-top:16px; padding-top:14px; border-top:1px solid var(--border); font-size:0.85rem; color:var(--text-muted);">
-            Trouble logging in or account suspended? <br>
-            <a href="https://t.me/CLN_AAU_Admin" target="_blank" rel="noopener noreferrer" style="color:#229ED9; font-weight:700; text-decoration:none;">Contact Admin @CLN_AAU_Admin on Telegram ✈️</a>
           </div>
         </div>
       </div>
@@ -365,11 +334,6 @@
 
           <div style="text-align:center; margin-top:20px; font-size:0.9rem; color:var(--text-muted);">
             Already registered? <a style="color:var(--blue); font-weight:600; cursor:pointer;" onclick="app.showView('login')">Log In</a>
-          </div>
-
-          <div style="text-align:center; margin-top:16px; padding-top:14px; border-top:1px solid var(--border); font-size:0.85rem; color:var(--text-muted);">
-            Need registration help or have questions? <br>
-            <a href="https://t.me/CLN_AAU_Admin" target="_blank" rel="noopener noreferrer" style="color:#229ED9; font-weight:700; text-decoration:none;">Chat with Admin @CLN_AAU_Admin on Telegram ✈️</a>
           </div>
         </div>
       </div>
@@ -467,12 +431,6 @@
             <!-- Items 1..N -->
           </div>
         </div>
-
-        <!-- QUIZ QUESTION SUPPORT PROMPT -->
-        <div style="text-align:center; margin-top:16px; font-size:0.85rem; color:var(--text-muted);">
-          Spotted an error, typo, or have a question? 
-          <a href="https://t.me/CLN_AAU_Admin" target="_blank" rel="noopener noreferrer" style="color:#229ED9; font-weight:700; text-decoration:none;">Contact Admin @CLN_AAU_Admin on Telegram ✈️</a>
-        </div>
       </div>
     </section>
 
@@ -492,17 +450,6 @@
           <button class="btn btn-primary" onclick="app.reviewAnswers()">Review Answers</button>
           <button class="btn btn-secondary" onclick="app.retryCurrentQuiz()">Try Again</button>
           <button class="btn btn-secondary" onclick="app.showCourseDetail(app.state.currentCourseId)">Back to Course</button>
-        </div>
-
-        <!-- RESULTS SUPPORT BOX -->
-        <div class="card" style="margin-top:20px; background:var(--blue-soft); border:1px solid var(--blue-light); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
-          <div>
-            <h4 style="color:var(--navy); font-size:1.05rem; font-weight:700; margin-bottom:4px;">Have Questions About This Quiz?</h4>
-            <p style="color:var(--text-muted); font-size:0.88rem;">Need clarification on an answer explanation or want to report an issue?</p>
-          </div>
-          <a href="https://t.me/CLN_AAU_Admin" target="_blank" rel="noopener noreferrer" class="btn btn-sm" style="background:#229ED9; color:#fff; border:none; display:inline-flex; align-items:center; gap:6px;">
-            <span>✈️</span> Ask @CLN_AAU_Admin
-          </a>
         </div>
 
         <!-- DETAILED ANSWER REVIEW CONTAINER -->
@@ -549,21 +496,6 @@
             <!-- List injected -->
           </div>
         </div>
-
-        <!-- DASHBOARD SUPPORT CARD -->
-        <div class="support-card">
-          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
-            <div>
-              <h4 style="color:var(--navy); font-size:1.1rem; font-weight:700; margin-bottom:4px;">Have Questions or Encountered an Issue?</h4>
-              <p style="color:var(--text-muted); font-size:0.9rem;">
-                Need help with a question, reporting a typo, or account support? Connect directly with the administrator.
-              </p>
-            </div>
-            <a href="https://t.me/CLN_AAU_Admin" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="background:#229ED9; border-color:#229ED9; display:inline-flex; align-items:center; gap:8px;">
-              <span>✈️</span> Message @CLN_AAU_Admin
-            </a>
-          </div>
-        </div>
       </div>
     </section>
 
@@ -585,34 +517,16 @@
 
     <!-- 11. SUSPENDED USER VIEW -->
     <section id="view-suspended" class="view-section" style="display:none; padding:60px 0;">
-      <div class="container" style="max-width:620px;">
-        <div class="card" style="text-align:center; padding:48px 32px; border:2px solid var(--red); box-shadow:var(--shadow-lg);">
-          <div style="font-size:3.5rem; margin-bottom:12px;">🚫</div>
-          <h2 style="color:var(--red); font-size:1.75rem; font-weight:800; margin-bottom:12px;">Account Suspended</h2>
-          <p style="color:var(--text-main); font-size:1.02rem; line-height:1.6; margin-bottom:20px;">
-            Your account currently cannot access CLN Questions. If you have any issue, question, need support, or believe your account was suspended by mistake, please contact the administrator directly on Telegram.
+      <div class="container">
+        <div class="suspended-box">
+          <div style="font-size:3rem; margin-bottom:12px;">🚫</div>
+          <h2 class="suspended-title">Your account has been suspended.</h2>
+          <p style="color:var(--text-main); margin-bottom:20px; font-size:1rem;">
+            You currently cannot access CLN Questions. If you believe this is a mistake or need assistance, please contact our support team.
           </p>
-
-          <div style="background:var(--blue-soft); border:1px solid var(--blue-light); border-radius:12px; padding:18px; margin-bottom:24px; text-align:left;">
-            <div style="font-weight:700; color:var(--navy); font-size:0.95rem; margin-bottom:6px;">Direct Administrator Support:</div>
-            <div style="color:var(--text-main); font-size:0.95rem; display:flex; align-items:center; gap:8px;">
-              <span>Telegram:</span>
-              <strong style="color:#229ED9; font-size:1.05rem;">@CLN_AAU_Admin</strong>
-            </div>
-            <div style="font-size:0.83rem; color:var(--text-muted); margin-top:6px;">
-              Direct contact for student account reinstatement, quiz questions, and technical support.
-            </div>
-          </div>
-
-          <div style="display:flex; flex-direction:column; gap:12px; align-items:center;">
-            <a href="https://t.me/CLN_AAU_Admin" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-lg" style="background:#229ED9; border-color:#229ED9; width:100%; max-width:380px; display:inline-flex; justify-content:center; align-items:center; gap:10px;">
-              <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
-              </svg>
-              <span>Connect with @CLN_AAU_Admin</span>
-            </a>
-            <button class="btn btn-secondary" onclick="app.handleLogout()" style="width:100%; max-width:380px;">Log Out & Switch Account</button>
-          </div>
+          <a href="https://t.me/CLN_AAU_Admin" target="_blank" class="btn btn-primary btn-lg">
+            📱 Contact Support on Telegram (@CLN_AAU_Admin)
+          </a>
         </div>
       </div>
     </section>
@@ -700,45 +614,16 @@
 
   <!-- FOOTER -->
   <footer class="footer">
-    <div class="container footer-content">
-      <div class="footer-col-main">
-        <div style="font-weight:800; color:#fff; font-size:1.15rem; display:flex; align-items:center; gap:8px;">
-          <span>🎓</span> CLN Questions — Practice. Improve. Get Ahead.
-        </div>
-        <p style="font-size:0.88rem; margin-top:8px; color:rgba(255,255,255,0.75); line-height:1.5;">
-          A dedicated academic examination and practice platform for Ethiopian university freshmen across Natural and Social Science programs.
-        </p>
+    <div class="container" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+      <div>
+        <div style="font-weight:700; color:#fff;">CLN Questions — Practice. Improve. Get Ahead.</div>
+        <div style="font-size:0.8rem; margin-top:4px;">Built for Ethiopian University Freshmen • Natural & Social Science</div>
       </div>
-
-      <div class="footer-col-support">
-        <div style="font-weight:700; color:#fff; margin-bottom:8px; font-size:1rem; display:flex; align-items:center; gap:8px;">
-          <span>✈️</span> Need Support or Have Questions?
-        </div>
-        <p style="font-size:0.85rem; color:rgba(255,255,255,0.75); margin-bottom:12px; line-height:1.4;">
-          Have issues with your account, need question explanations, or are currently suspended? Contact the platform administrator directly on Telegram.
-        </p>
-        <a href="https://t.me/CLN_AAU_Admin" target="_blank" rel="noopener noreferrer" class="btn btn-sm" style="background:#229ED9; color:#fff; border:none; display:inline-flex; align-items:center; gap:8px; font-weight:700;">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
-          </svg>
-          <span>Chat with @CLN_AAU_Admin</span>
-        </a>
-      </div>
-
-      <div class="footer-bottom">
-        <div>© 2026 CLN Questions. All rights reserved.</div>
-        <div>Direct Telegram Support: <a href="https://t.me/CLN_AAU_Admin" target="_blank" rel="noopener noreferrer" style="color:#229ED9; font-weight:700; text-decoration:none;">@CLN_AAU_Admin</a></div>
+      <div style="font-size:0.85rem;">
+        © 2026 CLN Questions. All rights reserved.
       </div>
     </div>
   </footer>
-
-  <!-- FLOATING TELEGRAM SUPPORT BUTTON -->
-  <a href="https://t.me/CLN_AAU_Admin" target="_blank" rel="noopener noreferrer" class="floating-telegram-btn" title="Have questions, need help, or facing an issue? Contact @CLN_AAU_Admin on Telegram">
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
-    </svg>
-    <span class="floating-tg-text">Need Help? Ask Admin</span>
-  </a>
 
   <!-- APPLICATION SCRIPTS -->
   <script src="/js/api.js"></script>

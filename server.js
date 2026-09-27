@@ -87,9 +87,8 @@ function verifyActiveUser(req, res, next) {
       return res.status(403).json({
         suspended: true,
         error: 'Your account has been suspended.',
-        message: 'You currently cannot access CLN Questions. If you have any issue, question, or need support, contact Admin on Telegram: @CLN_AAU_Admin',
-        supportContact: '@CLN_AAU_Admin',
-        telegramUrl: 'https://t.me/CLN_AAU_Admin'
+        message: 'You currently cannot access CLN Questions.',
+        supportContact: '@CLN_AAU_Admin'
       });
     }
 
@@ -206,9 +205,8 @@ app.post('/api/auth/login', (req, res) => {
       return res.status(403).json({
         suspended: true,
         error: 'Your account has been suspended.',
-        message: 'You currently cannot access CLN Questions. If you have any issue, question, or need support, contact Admin on Telegram: @CLN_AAU_Admin',
-        supportContact: '@CLN_AAU_Admin',
-        telegramUrl: 'https://t.me/CLN_AAU_Admin'
+        message: 'You currently cannot access CLN Questions.',
+        supportContact: '@CLN_AAU_Admin'
       });
     }
 
@@ -243,9 +241,8 @@ app.get('/api/auth/me', authenticateToken, (req, res) => {
       return res.status(403).json({
         suspended: true,
         error: 'Your account has been suspended.',
-        message: 'You currently cannot access CLN Questions. If you have any issue, question, or need support, contact Admin on Telegram: @CLN_AAU_Admin',
-        supportContact: '@CLN_AAU_Admin',
-        telegramUrl: 'https://t.me/CLN_AAU_Admin'
+        message: 'You currently cannot access CLN Questions.',
+        supportContact: '@CLN_AAU_Admin'
       });
     }
 

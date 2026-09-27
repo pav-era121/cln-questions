@@ -146,11 +146,7 @@ const app = {
         this.showView('dashboard');
       }
     } catch (err) {
-      if (err.message && err.message.toLowerCase().includes('suspend')) {
-        errorEl.innerHTML = `${err.message}<br><a href="https://t.me/CLN_AAU_Admin" target="_blank" rel="noopener noreferrer" style="color:#229ED9; font-weight:700; text-decoration:underline; display:inline-block; margin-top:6px;">Contact Admin @CLN_AAU_Admin on Telegram ✈️</a>`;
-      } else {
-        errorEl.innerText = err.message;
-      }
+      errorEl.innerText = err.message;
       errorEl.style.display = 'block';
     }
   },
