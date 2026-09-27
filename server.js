@@ -18,10 +18,24 @@ let dbPath;
 if (isServerless) {
   const tmpDbPath = path.join('/tmp', 'cln.db');
   const bundledDbPath = path.join(__dirname, 'db', 'cln.db');
-  if (!fs.existsSync(tmpDbPath) && fs.existsSync(bundledDbPath)) {
+  let needCopy = false;
+  if (!fs.existsSync(tmpDbPath)) {
+    needCopy = true;
+  } else if (fs.existsSync(bundledDbPath)) {
+    try {
+      const srcStat = fs.statSync(bundledDbPath);
+      const dstStat = fs.statSync(tmpDbPath);
+      if (srcStat.size !== dstStat.size) {
+        needCopy = true;
+      }
+    } catch (e) {
+      needCopy = true;
+    }
+  }
+  if (needCopy && fs.existsSync(bundledDbPath)) {
     try {
       fs.copyFileSync(bundledDbPath, tmpDbPath);
-      console.log('Copied bundled cln.db to /tmp/cln.db');
+      console.log('Synchronized updated bundled cln.db to /tmp/cln.db');
     } catch (e) {
       console.warn('Failed to copy bundled db to /tmp:', e.message);
     }

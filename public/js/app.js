@@ -230,15 +230,24 @@ const app = {
       `;
 
       const gridEl = document.getElementById('chapters-list-grid');
-      gridEl.innerHTML = chapters.map(ch => `
-        <div class="card" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0;">
-          <div>
-            <h4 style="font-size:1.1rem; font-weight:700; color:var(--navy);">${ch.name}</h4>
-            <p style="color:var(--text-muted); font-size:0.88rem; margin-top:4px;">${ch.description}</p>
+      if (!chapters || chapters.length === 0) {
+        gridEl.innerHTML = `
+          <div class="card" style="text-align:center; padding:32px 16px; grid-column:1/-1;">
+            <p style="color:var(--text-muted); font-size:1rem; margin-bottom:16px;">No chapters have been published for this course yet.</p>
+            <button class="btn btn-secondary" onclick="app.showView('courses')">← Back to All Courses</button>
           </div>
-          <button class="btn btn-primary" onclick="app.showChapterDetail('${ch.id}')">Start Quiz →</button>
-        </div>
-      `).join('');
+        `;
+      } else {
+        gridEl.innerHTML = chapters.map(ch => `
+          <div class="card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:0;">
+            <div style="flex:1; min-width:200px;">
+              <h4 style="font-size:1.1rem; font-weight:700; color:var(--navy);">${ch.name}</h4>
+              <p style="color:var(--text-muted); font-size:0.88rem; margin-top:4px;">${ch.description}</p>
+            </div>
+            <button class="btn btn-primary" onclick="app.showChapterDetail('${ch.id}')">Explore Quizzes →</button>
+          </div>
+        `).join('');
+      }
 
       this.showView('course-detail');
     } catch (err) {
@@ -261,12 +270,19 @@ const app = {
         </div>
 
         <h3 style="font-size:1.2rem; font-weight:700; color:var(--navy); margin-bottom:16px;">Available Chapter Quizzes</h3>
-        ${quizzes.map(q => `
-          <div class="card" style="display:flex; justify-content:space-between; align-items:center;">
-            <div>
-              <h4 style="font-size:1.1rem; font-weight:700; color:var(--navy);">${q.title}</h4>
-              <div style="font-size:0.85rem; color:var(--text-muted); margin-top:4px;">
-                ⏱️ ${q.time_limit} Minutes • ❓ ${q.question_count} Questions Served • 📈 ${q.difficulty} Difficulty
+        ${!quizzes || quizzes.length === 0 ? `
+          <div class="card" style="text-align:center; padding:32px 16px;">
+            <p style="color:var(--text-muted); font-size:1rem; margin-bottom:16px;">No quizzes have been published for this chapter yet.</p>
+            <button class="btn btn-secondary" onclick="app.showCourseDetail('${ch.course_id}')">← Back to Course</button>
+          </div>
+        ` : quizzes.map(q => `
+          <div class="card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+            <div style="flex:1; min-width:220px;">
+              <h4 style="font-size:1.15rem; font-weight:700; color:var(--navy);">${q.title}</h4>
+              <div style="font-size:0.88rem; color:var(--text-muted); margin-top:6px; display:flex; flex-wrap:wrap; gap:8px;">
+                <span>⏱️ ${q.time_limit} Min</span> • 
+                <span>❓ ${q.question_count} Questions</span> • 
+                <span class="brand-badge" style="font-size:0.75rem; padding:2px 6px;">${q.difficulty}</span>
               </div>
             </div>
             <button class="btn btn-success btn-lg" onclick="app.startChapterQuiz('${q.id}')">Take Quiz 🚀</button>
@@ -282,7 +298,7 @@ const app = {
 
   startChapterQuiz(quizId) {
     if (!this.state.user) {
-      alert('Please log in or register to take timed practice quizzes.');
+      alert('Please log in or register a student account to take timed practice quizzes.');
       this.showView('login');
       return;
     }
@@ -370,30 +386,32 @@ const app = {
         `;
       } else {
         recentEl.innerHTML = `
-          <table class="admin-table">
-            <thead>
-              <tr>
-                <th>Quiz</th>
-                <th>Course</th>
-                <th>Score</th>
-                <th>Percentage</th>
-                <th>XP Earned</th>
-                <th>Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${recent.map(r => `
+          <div class="table-responsive">
+            <table class="admin-table">
+              <thead>
                 <tr>
-                  <td><strong>${r.quiz_title}</strong></td>
-                  <td>${r.course_name}</td>
-                  <td>${r.score}</td>
-                  <td><span class="status-badge status-active">${r.percentage}%</span></td>
-                  <td>+${r.xp_earned} XP</td>
-                  <td>${new Date(r.completed_at).toLocaleDateString()}</td>
+                  <th>Quiz</th>
+                  <th>Course</th>
+                  <th>Score</th>
+                  <th>Percentage</th>
+                  <th>XP Earned</th>
+                  <th>Date</th>
                 </tr>
-              `).join('')}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                ${recent.map(r => `
+                  <tr>
+                    <td><strong>${r.quiz_title}</strong></td>
+                    <td>${r.course_name}</td>
+                    <td>${r.score}</td>
+                    <td><span class="status-badge status-active">${r.percentage}%</span></td>
+                    <td>+${r.xp_earned} XP</td>
+                    <td>${new Date(r.completed_at).toLocaleDateString()}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
         `;
       }
     } catch (err) {
@@ -413,30 +431,32 @@ const app = {
       }
 
       container.innerHTML = `
-        <table class="admin-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Course</th>
-              <th>Chapter / Quiz</th>
-              <th>Score</th>
-              <th>Accuracy</th>
-              <th>XP Earned</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${history.map(h => `
+        <div class="table-responsive">
+          <table class="admin-table">
+            <thead>
               <tr>
-                <td>${new Date(h.completed_at).toLocaleString()}</td>
-                <td><strong>${h.course_name}</strong></td>
-                <td>${h.quiz_title}</td>
-                <td>${h.score}</td>
-                <td><span class="status-badge ${h.percentage >= 70 ? 'status-active' : 'status-suspended'}">${h.percentage}%</span></td>
-                <td>+${h.xp_earned} XP</td>
+                <th>Date</th>
+                <th>Course</th>
+                <th>Chapter / Quiz</th>
+                <th>Score</th>
+                <th>Accuracy</th>
+                <th>XP Earned</th>
               </tr>
-            `).join('')}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              ${history.map(h => `
+                <tr>
+                  <td>${new Date(h.completed_at).toLocaleString()}</td>
+                  <td><strong>${h.course_name}</strong></td>
+                  <td>${h.quiz_title}</td>
+                  <td>${h.score}</td>
+                  <td><span class="status-badge ${h.percentage >= 70 ? 'status-active' : 'status-suspended'}">${h.percentage}%</span></td>
+                  <td>+${h.xp_earned} XP</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
       `;
     } catch (err) {
       console.error('Error loading history:', err);
