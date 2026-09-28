@@ -28,6 +28,15 @@ if (!fs.existsSync(uploadDir)) {
 app.use('/uploads', express.static(uploadDir));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Self-healing DB migrations
+(async () => {
+  try {
+    await db.exec('ALTER TABLE quiz_attempts ADD COLUMN served_question_ids TEXT;');
+  } catch (e) {
+    // Column already exists, safe to ignore
+  }
+})();
+
 // Multer Storage Engine
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
@@ -324,10 +333,12 @@ app.get('/api/quizzes/:id/start', authenticateToken, verifyActiveUser, async (re
     const finalQuestions = rawQuestions.slice(0, targetLimit);
 
     const attemptId = 'att_' + Date.now() + '_' + Math.round(Math.random() * 1000);
+    const servedQuestionIds = JSON.stringify(finalQuestions.map(q => q.id));
+
     await db.prepare(`
-      INSERT INTO quiz_attempts (id, user_id, quiz_id, started_at, score, percentage, xp_earned)
-      VALUES (?, ?, ?, ?, 0, 0.0, 0)
-    `).run(attemptId, req.user.id, quiz.id, new Date().toISOString());
+      INSERT INTO quiz_attempts (id, user_id, quiz_id, started_at, score, percentage, xp_earned, served_question_ids)
+      VALUES (?, ?, ?, ?, 0, 0.0, 0, ?)
+    `).run(attemptId, req.user.id, quiz.id, new Date().toISOString(), servedQuestionIds);
 
     res.json({
       attemptId,
@@ -361,7 +372,32 @@ app.post('/api/quizzes/:id/submit', authenticateToken, verifyActiveUser, async (
     if (!attempt) return res.status(404).json({ error: 'Quiz attempt record not found.' });
 
     const quiz = await db.prepare('SELECT * FROM quizzes WHERE id = ?').get(req.params.id);
-    const questions = await db.prepare('SELECT * FROM questions WHERE quiz_id = ?').all(req.params.id);
+
+    // Determine the exact list of questions that were served to the student
+    let questions = [];
+    if (attempt.served_question_ids) {
+      try {
+        const ids = JSON.parse(attempt.served_question_ids);
+        if (Array.isArray(ids) && ids.length > 0) {
+          const placeholders = ids.map(() => '?').join(',');
+          const fetched = await db.prepare(`SELECT * FROM questions WHERE id IN (${placeholders})`).all(ids);
+          const qMap = new Map(fetched.map(q => [q.id, q]));
+          questions = ids.map(id => qMap.get(id)).filter(Boolean);
+        }
+      } catch (e) {
+        console.error('Failed to parse served_question_ids:', e);
+      }
+    }
+
+    if (!questions || questions.length === 0) {
+      const allQuestions = await db.prepare('SELECT * FROM questions WHERE quiz_id = ?').all(req.params.id);
+      const answeredKeys = Object.keys(userAnswers || {});
+      if (answeredKeys.length > 0 && answeredKeys.length < allQuestions.length) {
+        questions = allQuestions.filter(q => answeredKeys.includes(q.id));
+      } else {
+        questions = allQuestions;
+      }
+    }
 
     let correctCount = 0;
     const reviewDetails = [];
@@ -696,7 +732,12 @@ app.post('/api/admin/questions', authenticateToken, requireAdmin, async (req, re
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, quizId, questionText.trim(), imageUrl || '', optionA.trim(), optionB.trim(), optionC.trim(), optionD.trim(), correctAnswer.trim().toUpperCase(), (explanation || '').trim());
 
-    res.json({ message: 'Question added to bank successfully.', questionId: id });
+    // Automatically keep quiz question_count in sync with bank count so new questions are served by default
+    const countResult = await db.prepare('SELECT COUNT(*) AS c FROM questions WHERE quiz_id = ?').get(quizId);
+    const count = countResult ? countResult.c : 0;
+    await db.prepare('UPDATE quizzes SET question_count = ? WHERE id = ?').run(count, quizId);
+
+    res.json({ message: 'Question added to bank successfully.', questionId: id, totalQuestions: count });
   } catch (err) {
     console.error('Error adding question:', err);
     res.status(500).json({ error: 'Failed to add question: ' + err.message });

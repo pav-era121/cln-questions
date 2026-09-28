@@ -86,6 +86,7 @@ db.exec(`
     score INTEGER DEFAULT 0,
     percentage REAL DEFAULT 0.0,
     xp_earned INTEGER DEFAULT 0,
+    served_question_ids TEXT,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE
   );
