@@ -5,38 +5,10 @@ const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
-const { DatabaseSync } = require('node:sqlite');
+const db = require('./db/client');
 
 const JWT_SECRET = 'CLN_QUESTIONS_ETHIOPIA_JWT_SECRET_2026';
 const PORT = process.env.PORT || 3000;
-
-// Detect Serverless / Vercel Environment
-const isServerless = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
-
-// Initialize Database Connection (supports local & Vercel serverless /tmp)
-let dbPath;
-if (isServerless) {
-  const tmpDbPath = path.join('/tmp', 'cln.db');
-  const bundledDbPath = path.join(__dirname, 'db', 'cln.db');
-  if (!fs.existsSync(tmpDbPath)) {
-    try {
-      fs.copyFileSync(bundledDbPath, tmpDbPath);
-      console.log('Initialized bundled cln.db to /tmp/cln.db');
-    } catch (e) {
-      console.warn('Failed to copy bundled db to /tmp:', e.message);
-    }
-  }
-  dbPath = fs.existsSync(tmpDbPath) ? tmpDbPath : bundledDbPath;
-} else {
-  const localDbDir = path.join(__dirname, 'db');
-  if (!fs.existsSync(localDbDir)) {
-    fs.mkdirSync(localDbDir, { recursive: true });
-  }
-  dbPath = path.join(localDbDir, 'cln.db');
-}
-
-const db = new DatabaseSync(dbPath);
-db.exec('PRAGMA foreign_keys = ON;');
 
 const app = express();
 
@@ -44,8 +16,8 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Upload Directory Setup (safe for read-only serverless filesystems)
-const uploadDir = isServerless ? path.join('/tmp', 'uploads') : path.join(__dirname, 'uploads');
+// Upload Directory Setup (safe for local & serverless)
+const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) {
   try {
     fs.mkdirSync(uploadDir, { recursive: true });
@@ -101,10 +73,9 @@ function authenticateToken(req, res, next) {
 }
 
 // User Status Authorization Middleware (Enforces Suspended Status Server-Side)
-function verifyActiveUser(req, res, next) {
+async function verifyActiveUser(req, res, next) {
   try {
-    const stmt = db.prepare('SELECT id, full_name, email, phone, status, total_xp FROM users WHERE id = ?');
-    const user = stmt.get(req.user.id);
+    const user = await db.prepare('SELECT id, full_name, email, phone, status, total_xp FROM users WHERE id = ?').get(req.user.id);
 
     if (!user) {
       return res.status(404).json({ error: 'User record not found.' });
@@ -139,7 +110,7 @@ function requireAdmin(req, res, next) {
 // 1. AUTHENTICATION ENDPOINTS
 // ==========================================
 
-app.post('/api/auth/register', (req, res) => {
+app.post('/api/auth/register', async (req, res) => {
   const { fullName, email, phone, password, marketingConsent } = req.body;
 
   if (!fullName || !email || !phone || !password) {
@@ -161,9 +132,7 @@ app.post('/api/auth/register', (req, res) => {
   }
 
   try {
-    // Check duplicate
-    const checkStmt = db.prepare('SELECT id FROM users WHERE email = ? OR phone = ?');
-    const existing = checkStmt.get(email.toLowerCase().trim(), validPhone);
+    const existing = await db.prepare('SELECT id FROM users WHERE email = ? OR phone = ?').get(email.toLowerCase().trim(), validPhone);
     if (existing) {
       return res.status(400).json({ error: 'An account with this email or phone number already exists.' });
     }
@@ -172,12 +141,10 @@ app.post('/api/auth/register', (req, res) => {
     const passwordHash = bcrypt.hashSync(password, salt);
     const userId = 'u_' + Date.now() + '_' + Math.round(Math.random() * 1000);
 
-    const insertStmt = db.prepare(`
+    await db.prepare(`
       INSERT INTO users (id, full_name, email, phone, password_hash, marketing_consent, status, total_xp, created_at)
       VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE', 0, ?)
-    `);
-
-    insertStmt.run(
+    `).run(
       userId,
       fullName.trim(),
       email.toLowerCase().trim(),
@@ -206,7 +173,7 @@ app.post('/api/auth/register', (req, res) => {
   }
 });
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   const { loginIdentifier, password } = req.body;
 
   if (!loginIdentifier || !password) {
@@ -217,8 +184,7 @@ app.post('/api/auth/login', (req, res) => {
     const identifier = loginIdentifier.trim();
     const formattedPhone = formatEthiopianPhone(identifier);
 
-    const stmt = db.prepare('SELECT * FROM users WHERE email = ? OR phone = ?');
-    const user = stmt.get(identifier.toLowerCase(), formattedPhone || identifier);
+    const user = await db.prepare('SELECT * FROM users WHERE email = ? OR phone = ?').get(identifier.toLowerCase(), formattedPhone || identifier);
 
     if (!user) {
       return res.status(400).json({ error: 'Invalid email/phone or password.' });
@@ -240,7 +206,7 @@ app.post('/api/auth/login', (req, res) => {
     }
 
     // Update last_active
-    db.prepare('UPDATE users SET last_active = ? WHERE id = ?').run(new Date().toISOString(), user.id);
+    await db.prepare('UPDATE users SET last_active = ? WHERE id = ?').run(new Date().toISOString(), user.id);
 
     const token = jwt.sign({ id: user.id, email: user.email, name: user.full_name }, JWT_SECRET, { expiresIn: '7d' });
 
@@ -261,9 +227,9 @@ app.post('/api/auth/login', (req, res) => {
   }
 });
 
-app.get('/api/auth/me', authenticateToken, (req, res) => {
+app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {
-    const user = db.prepare('SELECT id, full_name, email, phone, status, total_xp, created_at FROM users WHERE id = ?').get(req.user.id);
+    const user = await db.prepare('SELECT id, full_name, email, phone, status, total_xp, created_at FROM users WHERE id = ?').get(req.user.id);
     if (!user) return res.status(404).json({ error: 'User not found.' });
 
     if (user.status === 'SUSPENDED') {
@@ -286,9 +252,9 @@ app.get('/api/auth/me', authenticateToken, (req, res) => {
 // 2. PUBLIC & STUDENT COURSE/QUIZ ENDPOINTS
 // ==========================================
 
-app.get('/api/courses', (req, res) => {
+app.get('/api/courses', async (req, res) => {
   try {
-    const courses = db.prepare(`
+    const courses = await db.prepare(`
       SELECT c.*, COUNT(ch.id) AS chapter_count
       FROM courses c
       LEFT JOIN chapters ch ON c.id = ch.course_id AND ch.status = 'ACTIVE'
@@ -299,16 +265,16 @@ app.get('/api/courses', (req, res) => {
 
     res.json({ courses });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to load courses.' });
+    res.status(500).json({ error: 'Failed to load courses: ' + err.message });
   }
 });
 
-app.get('/api/courses/:id', (req, res) => {
+app.get('/api/courses/:id', async (req, res) => {
   try {
-    const course = db.prepare("SELECT * FROM courses WHERE id = ? AND status = 'ACTIVE'").get(req.params.id);
+    const course = await db.prepare("SELECT * FROM courses WHERE id = ? AND status = 'ACTIVE'").get(req.params.id);
     if (!course) return res.status(404).json({ error: 'Course not found.' });
 
-    const chapters = db.prepare(`
+    const chapters = await db.prepare(`
       SELECT ch.*, COUNT(q.id) AS quiz_count
       FROM chapters ch
       LEFT JOIN quizzes q ON ch.id = q.chapter_id AND q.status = 'ACTIVE'
@@ -323,12 +289,12 @@ app.get('/api/courses/:id', (req, res) => {
   }
 });
 
-app.get('/api/chapters/:id', (req, res) => {
+app.get('/api/chapters/:id', async (req, res) => {
   try {
-    const chapter = db.prepare("SELECT * FROM chapters WHERE id = ? AND status = 'ACTIVE'").get(req.params.id);
+    const chapter = await db.prepare("SELECT * FROM chapters WHERE id = ? AND status = 'ACTIVE'").get(req.params.id);
     if (!chapter) return res.status(404).json({ error: 'Chapter not found.' });
 
-    const quizzes = db.prepare("SELECT * FROM quizzes WHERE chapter_id = ? AND status = 'ACTIVE' ORDER BY created_at ASC").all(req.params.id);
+    const quizzes = await db.prepare("SELECT * FROM quizzes WHERE chapter_id = ? AND status = 'ACTIVE' ORDER BY created_at ASC").all(req.params.id);
 
     res.json({ chapter, quizzes });
   } catch (err) {
@@ -337,16 +303,15 @@ app.get('/api/chapters/:id', (req, res) => {
 });
 
 // Start Quiz (Protected & Authoritative - Hides Correct Answers!)
-app.get('/api/quizzes/:id/start', authenticateToken, verifyActiveUser, (req, res) => {
+app.get('/api/quizzes/:id/start', authenticateToken, verifyActiveUser, async (req, res) => {
   try {
-    const quiz = db.prepare("SELECT * FROM quizzes WHERE id = ? AND status = 'ACTIVE'").get(req.params.id);
+    const quiz = await db.prepare("SELECT * FROM quizzes WHERE id = ? AND status = 'ACTIVE'").get(req.params.id);
     if (!quiz) return res.status(404).json({ error: 'Quiz not found or inactive.' });
 
-    const chapter = db.prepare('SELECT * FROM chapters WHERE id = ?').get(quiz.chapter_id);
-    const course = db.prepare('SELECT * FROM courses WHERE id = ?').get(chapter.course_id);
+    const chapter = await db.prepare('SELECT * FROM chapters WHERE id = ?').get(quiz.chapter_id);
+    const course = await db.prepare('SELECT * FROM courses WHERE id = ?').get(chapter.course_id);
 
-    // Fetch questions WITHOUT correct_answer or explanation
-    const rawQuestions = db.prepare(`
+    const rawQuestions = await db.prepare(`
       SELECT id, quiz_id, question_text, image_url, option_a, option_b, option_c, option_d
       FROM questions WHERE quiz_id = ?
     `).all(quiz.id);
@@ -355,13 +320,11 @@ app.get('/api/quizzes/:id/start', authenticateToken, verifyActiveUser, (req, res
       return res.status(400).json({ error: 'No questions available for this quiz.' });
     }
 
-    // Admin configured question_count limit
     const targetLimit = quiz.question_count && quiz.question_count > 0 ? quiz.question_count : rawQuestions.length;
     const finalQuestions = rawQuestions.slice(0, targetLimit);
 
-    // Create attempt
     const attemptId = 'att_' + Date.now() + '_' + Math.round(Math.random() * 1000);
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO quiz_attempts (id, user_id, quiz_id, started_at, score, percentage, xp_earned)
       VALUES (?, ?, ?, ?, 0, 0.0, 0)
     `).run(attemptId, req.user.id, quiz.id, new Date().toISOString());
@@ -386,19 +349,19 @@ app.get('/api/quizzes/:id/start', authenticateToken, verifyActiveUser, (req, res
 });
 
 // Submit Quiz (Server-side Authoritative Scoring & XP Award)
-app.post('/api/quizzes/:id/submit', authenticateToken, verifyActiveUser, (req, res) => {
-  const { attemptId, userAnswers } = req.body; // userAnswers: { questionId: selectedOption }
+app.post('/api/quizzes/:id/submit', authenticateToken, verifyActiveUser, async (req, res) => {
+  const { attemptId, userAnswers } = req.body;
 
   if (!attemptId || !userAnswers) {
     return res.status(400).json({ error: 'Attempt ID and user answers are required.' });
   }
 
   try {
-    const attempt = db.prepare('SELECT * FROM quiz_attempts WHERE id = ? AND user_id = ?').get(attemptId, req.user.id);
+    const attempt = await db.prepare('SELECT * FROM quiz_attempts WHERE id = ? AND user_id = ?').get(attemptId, req.user.id);
     if (!attempt) return res.status(404).json({ error: 'Quiz attempt record not found.' });
 
-    const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ?').get(req.params.id);
-    const questions = db.prepare('SELECT * FROM questions WHERE quiz_id = ?').all(req.params.id);
+    const quiz = await db.prepare('SELECT * FROM quizzes WHERE id = ?').get(req.params.id);
+    const questions = await db.prepare('SELECT * FROM questions WHERE quiz_id = ?').all(req.params.id);
 
     let correctCount = 0;
     const reviewDetails = [];
@@ -408,13 +371,13 @@ app.post('/api/quizzes/:id/submit', authenticateToken, verifyActiveUser, (req, r
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
-    questions.forEach(q => {
+    for (const q of questions) {
       const selected = userAnswers[q.id] || 'UNANSWERED';
       const isCorrect = selected.toUpperCase() === q.correct_answer.toUpperCase() ? 1 : 0;
       if (isCorrect) correctCount++;
 
       const answerId = 'ans_' + Date.now() + '_' + Math.round(Math.random() * 10000);
-      insertAnswerStmt.run(answerId, attemptId, req.user.id, q.id, selected, isCorrect, new Date().toISOString());
+      await insertAnswerStmt.run(answerId, attemptId, req.user.id, q.id, selected, isCorrect, new Date().toISOString());
 
       reviewDetails.push({
         questionId: q.id,
@@ -429,23 +392,21 @@ app.post('/api/quizzes/:id/submit', authenticateToken, verifyActiveUser, (req, r
         isCorrect: isCorrect === 1,
         explanation: q.explanation
       });
-    });
+    }
 
     const totalQuestions = questions.length;
     const percentage = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
-    const xpEarned = correctCount * 10; // Rule: 1 correct = 10 XP
+    const xpEarned = correctCount * 10;
 
-    // Update attempt
-    db.prepare(`
+    await db.prepare(`
       UPDATE quiz_attempts
       SET completed_at = ?, score = ?, percentage = ?, xp_earned = ?
       WHERE id = ?
     `).run(new Date().toISOString(), correctCount, percentage, xpEarned, attemptId);
 
-    // Update user total XP
-    db.prepare('UPDATE users SET total_xp = total_xp + ? WHERE id = ?').run(xpEarned, req.user.id);
+    await db.prepare('UPDATE users SET total_xp = total_xp + ? WHERE id = ?').run(xpEarned, req.user.id);
 
-    const updatedUser = db.prepare('SELECT total_xp FROM users WHERE id = ?').get(req.user.id);
+    const updatedUser = await db.prepare('SELECT total_xp FROM users WHERE id = ?').get(req.user.id);
 
     res.json({
       attemptId,
@@ -462,15 +423,15 @@ app.post('/api/quizzes/:id/submit', authenticateToken, verifyActiveUser, (req, r
 });
 
 // Student Dashboard & Analytics
-app.get('/api/student/dashboard', authenticateToken, verifyActiveUser, (req, res) => {
+app.get('/api/student/dashboard', authenticateToken, verifyActiveUser, async (req, res) => {
   try {
     const user = req.dbUser;
 
-    const attemptsCount = db.prepare('SELECT COUNT(*) AS count FROM quiz_attempts WHERE user_id = ? AND completed_at IS NOT NULL').get(user.id);
-    const avgScore = db.prepare('SELECT AVG(percentage) AS avg_perc FROM quiz_attempts WHERE user_id = ? AND completed_at IS NOT NULL').get(user.id);
-    const bestScore = db.prepare('SELECT MAX(percentage) AS max_perc FROM quiz_attempts WHERE user_id = ? AND completed_at IS NOT NULL').get(user.id);
+    const attemptsCount = await db.prepare('SELECT COUNT(*) AS count FROM quiz_attempts WHERE user_id = ? AND completed_at IS NOT NULL').get(user.id);
+    const avgScore = await db.prepare('SELECT AVG(percentage) AS avg_perc FROM quiz_attempts WHERE user_id = ? AND completed_at IS NOT NULL').get(user.id);
+    const bestScore = await db.prepare('SELECT MAX(percentage) AS max_perc FROM quiz_attempts WHERE user_id = ? AND completed_at IS NOT NULL').get(user.id);
 
-    const recentAttempts = db.prepare(`
+    const recentAttempts = await db.prepare(`
       SELECT qa.*, q.title AS quiz_title, c.name AS course_name, ch.name AS chapter_name
       FROM quiz_attempts qa
       JOIN quizzes q ON qa.quiz_id = q.id
@@ -485,9 +446,9 @@ app.get('/api/student/dashboard', authenticateToken, verifyActiveUser, (req, res
       user,
       stats: {
         totalXp: user.total_xp,
-        quizzesCompleted: attemptsCount.count || 0,
-        averageScore: Math.round(avgScore.avg_perc || 0),
-        bestScore: Math.round(bestScore.max_perc || 0)
+        quizzesCompleted: attemptsCount ? attemptsCount.count : 0,
+        averageScore: Math.round((avgScore && avgScore.avg_perc) || 0),
+        bestScore: Math.round((bestScore && bestScore.max_perc) || 0)
       },
       recentAttempts
     });
@@ -497,9 +458,9 @@ app.get('/api/student/dashboard', authenticateToken, verifyActiveUser, (req, res
 });
 
 // Student History
-app.get('/api/student/history', authenticateToken, verifyActiveUser, (req, res) => {
+app.get('/api/student/history', authenticateToken, verifyActiveUser, async (req, res) => {
   try {
-    const history = db.prepare(`
+    const history = await db.prepare(`
       SELECT qa.*, q.title AS quiz_title, c.name AS course_name, ch.name AS chapter_name
       FROM quiz_attempts qa
       JOIN quizzes q ON qa.quiz_id = q.id
@@ -519,14 +480,15 @@ app.get('/api/student/history', authenticateToken, verifyActiveUser, (req, res) 
 // 3. ADMIN MANAGEMENT ENDPOINTS
 // ==========================================
 
-app.get('/api/admin/stats', authenticateToken, requireAdmin, (req, res) => {
+app.get('/api/admin/stats', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const totalStudents = db.prepare("SELECT COUNT(*) AS count FROM users WHERE email != 'admin@cln.edu.et'").get().count;
-    const activeStudents = db.prepare("SELECT COUNT(*) AS count FROM users WHERE status = 'ACTIVE' AND email != 'admin@cln.edu.et'").get().count;
-    const suspendedStudents = db.prepare("SELECT COUNT(*) AS count FROM users WHERE status = 'SUSPENDED'").get().count;
-    const totalAttempts = db.prepare("SELECT COUNT(*) AS count FROM quiz_attempts WHERE completed_at IS NOT NULL").get().count;
-    const totalQuestions = db.prepare("SELECT COUNT(*) AS count FROM questions").get().count;
-    const avgScore = db.prepare("SELECT AVG(percentage) AS avg_perc FROM quiz_attempts WHERE completed_at IS NOT NULL").get().avg_perc || 0;
+    const totalStudents = (await db.prepare("SELECT COUNT(*) AS count FROM users WHERE email != 'admin@cln.edu.et'").get()).count;
+    const activeStudents = (await db.prepare("SELECT COUNT(*) AS count FROM users WHERE status = 'ACTIVE' AND email != 'admin@cln.edu.et'").get()).count;
+    const suspendedStudents = (await db.prepare("SELECT COUNT(*) AS count FROM users WHERE status = 'SUSPENDED'").get()).count;
+    const totalAttempts = (await db.prepare("SELECT COUNT(*) AS count FROM quiz_attempts WHERE completed_at IS NOT NULL").get()).count;
+    const totalQuestions = (await db.prepare("SELECT COUNT(*) AS count FROM questions").get()).count;
+    const avgScoreResult = await db.prepare("SELECT AVG(percentage) AS avg_perc FROM quiz_attempts WHERE completed_at IS NOT NULL").get();
+    const avgScore = avgScoreResult && avgScoreResult.avg_perc ? avgScoreResult.avg_perc : 0;
 
     res.json({
       stats: {
@@ -539,13 +501,13 @@ app.get('/api/admin/stats', authenticateToken, requireAdmin, (req, res) => {
       }
     });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to load admin stats.' });
+    res.status(500).json({ error: 'Failed to load admin stats: ' + err.message });
   }
 });
 
-app.get('/api/admin/users', authenticateToken, requireAdmin, (req, res) => {
+app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const users = db.prepare(`
+    const users = await db.prepare(`
       SELECT u.id, u.full_name, u.email, u.phone, u.status, u.total_xp, u.created_at, u.last_active,
              COUNT(qa.id) AS quiz_attempts
       FROM users u
@@ -557,18 +519,18 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, (req, res) => {
 
     res.json({ users });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to load student list.' });
+    res.status(500).json({ error: 'Failed to load student list: ' + err.message });
   }
 });
 
-app.patch('/api/admin/users/:id/status', authenticateToken, requireAdmin, (req, res) => {
-  const { status } = req.body; // 'ACTIVE' or 'SUSPENDED'
+app.patch('/api/admin/users/:id/status', authenticateToken, requireAdmin, async (req, res) => {
+  const { status } = req.body;
   if (!['ACTIVE', 'SUSPENDED'].includes(status)) {
     return res.status(400).json({ error: 'Status must be ACTIVE or SUSPENDED.' });
   }
 
   try {
-    db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, req.params.id);
+    await db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, req.params.id);
     res.json({ message: `User status updated to ${status}.` });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update user status.' });
@@ -576,25 +538,25 @@ app.patch('/api/admin/users/:id/status', authenticateToken, requireAdmin, (req, 
 });
 
 // Admin Course CRUD
-app.post('/api/admin/courses', authenticateToken, requireAdmin, (req, res) => {
+app.post('/api/admin/courses', authenticateToken, requireAdmin, async (req, res) => {
   const { name, description, imageUrl, status } = req.body;
   if (!name) return res.status(400).json({ error: 'Course name is required.' });
 
   try {
     const id = 'c_' + Date.now();
-    db.prepare('INSERT INTO courses (id, name, description, image_url, status) VALUES (?, ?, ?, ?, ?)').run(id, name, description || '', imageUrl || '', status || 'ACTIVE');
+    await db.prepare('INSERT INTO courses (id, name, description, image_url, status) VALUES (?, ?, ?, ?, ?)').run(id, name, description || '', imageUrl || '', status || 'ACTIVE');
     res.json({ message: 'Course created successfully.', courseId: id });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to create course.' });
+    res.status(500).json({ error: 'Failed to create course: ' + err.message });
   }
 });
 
-app.put('/api/admin/courses/:id', authenticateToken, requireAdmin, (req, res) => {
+app.put('/api/admin/courses/:id', authenticateToken, requireAdmin, async (req, res) => {
   const { name, description, imageUrl, status } = req.body;
   try {
-    const existing = db.prepare('SELECT * FROM courses WHERE id = ?').get(req.params.id);
+    const existing = await db.prepare('SELECT * FROM courses WHERE id = ?').get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Course not found.' });
-    db.prepare('UPDATE courses SET name = ?, description = ?, image_url = ?, status = ? WHERE id = ?').run(
+    await db.prepare('UPDATE courses SET name = ?, description = ?, image_url = ?, status = ? WHERE id = ?').run(
       name || existing.name,
       description !== undefined ? description : existing.description,
       imageUrl !== undefined ? imageUrl : existing.image_url,
@@ -607,35 +569,35 @@ app.put('/api/admin/courses/:id', authenticateToken, requireAdmin, (req, res) =>
   }
 });
 
-app.delete('/api/admin/courses/:id', authenticateToken, requireAdmin, (req, res) => {
+app.delete('/api/admin/courses/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    db.prepare('DELETE FROM courses WHERE id = ?').run(req.params.id);
+    await db.prepare('DELETE FROM courses WHERE id = ?').run(req.params.id);
     res.json({ message: 'Course deleted successfully.' });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to delete course.' });
+    res.status(500).json({ error: 'Failed to delete course: ' + err.message });
   }
 });
 
 // Admin Chapter CRUD
-app.post('/api/admin/chapters', authenticateToken, requireAdmin, (req, res) => {
+app.post('/api/admin/chapters', authenticateToken, requireAdmin, async (req, res) => {
   const { courseId, name, description, imageUrl, chapterOrder, status } = req.body;
   if (!courseId || !name) return res.status(400).json({ error: 'Course ID and Chapter name are required.' });
 
   try {
     const id = 'ch_' + Date.now();
-    db.prepare('INSERT INTO chapters (id, course_id, name, description, image_url, chapter_order, status) VALUES (?, ?, ?, ?, ?, ?, ?)').run(id, courseId, name, description || '', imageUrl || '', chapterOrder || 1, status || 'ACTIVE');
+    await db.prepare('INSERT INTO chapters (id, course_id, name, description, image_url, chapter_order, status) VALUES (?, ?, ?, ?, ?, ?, ?)').run(id, courseId, name, description || '', imageUrl || '', chapterOrder || 1, status || 'ACTIVE');
     res.json({ message: 'Chapter created successfully.', chapterId: id });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to create chapter.' });
+    res.status(500).json({ error: 'Failed to create chapter: ' + err.message });
   }
 });
 
-app.put('/api/admin/chapters/:id', authenticateToken, requireAdmin, (req, res) => {
+app.put('/api/admin/chapters/:id', authenticateToken, requireAdmin, async (req, res) => {
   const { name, description, imageUrl, chapterOrder, status } = req.body;
   try {
-    const existing = db.prepare('SELECT * FROM chapters WHERE id = ?').get(req.params.id);
+    const existing = await db.prepare('SELECT * FROM chapters WHERE id = ?').get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Chapter not found.' });
-    db.prepare('UPDATE chapters SET name = ?, description = ?, image_url = ?, chapter_order = ?, status = ? WHERE id = ?').run(
+    await db.prepare('UPDATE chapters SET name = ?, description = ?, image_url = ?, chapter_order = ?, status = ? WHERE id = ?').run(
       name || existing.name,
       description !== undefined ? description : existing.description,
       imageUrl !== undefined ? imageUrl : existing.image_url,
@@ -649,22 +611,22 @@ app.put('/api/admin/chapters/:id', authenticateToken, requireAdmin, (req, res) =
   }
 });
 
-app.delete('/api/admin/chapters/:id', authenticateToken, requireAdmin, (req, res) => {
+app.delete('/api/admin/chapters/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    db.prepare('DELETE FROM chapters WHERE id = ?').run(req.params.id);
+    await db.prepare('DELETE FROM chapters WHERE id = ?').run(req.params.id);
     res.json({ message: 'Chapter deleted successfully.' });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to delete chapter.' });
+    res.status(500).json({ error: 'Failed to delete chapter: ' + err.message });
   }
 });
 
 // Admin Content Hierarchy Tree
-app.get('/api/admin/content-tree', authenticateToken, requireAdmin, (req, res) => {
+app.get('/api/admin/content-tree', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const courses = db.prepare("SELECT * FROM courses ORDER BY created_at ASC").all();
-    const chapters = db.prepare("SELECT * FROM chapters ORDER BY chapter_order ASC, created_at ASC").all();
-    const quizzes = db.prepare("SELECT * FROM quizzes ORDER BY created_at ASC").all();
-    const questions = db.prepare("SELECT id, quiz_id, question_text, image_url, option_a, option_b, option_c, option_d, correct_answer, explanation FROM questions").all();
+    const courses = await db.prepare("SELECT * FROM courses ORDER BY created_at ASC").all();
+    const chapters = await db.prepare("SELECT * FROM chapters ORDER BY chapter_order ASC, created_at ASC").all();
+    const quizzes = await db.prepare("SELECT * FROM quizzes ORDER BY created_at ASC").all();
+    const questions = await db.prepare("SELECT id, quiz_id, question_text, image_url, option_a, option_b, option_c, option_d, correct_answer, explanation FROM questions").all();
 
     res.json({ courses, chapters, quizzes, questions });
   } catch (err) {
@@ -673,25 +635,25 @@ app.get('/api/admin/content-tree', authenticateToken, requireAdmin, (req, res) =
 });
 
 // Admin Quiz CRUD
-app.post('/api/admin/quizzes', authenticateToken, requireAdmin, (req, res) => {
+app.post('/api/admin/quizzes', authenticateToken, requireAdmin, async (req, res) => {
   const { chapterId, title, description, questionCount, timeLimit, difficulty, status } = req.body;
   if (!chapterId || !title) return res.status(400).json({ error: 'Chapter ID and Quiz title are required.' });
 
   try {
     const id = 'quiz_' + Date.now();
-    db.prepare('INSERT INTO quizzes (id, chapter_id, title, description, question_count, time_limit, difficulty, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(id, chapterId, title, description || '', questionCount || 10, timeLimit || 15, difficulty || 'Medium', status || 'ACTIVE');
+    await db.prepare('INSERT INTO quizzes (id, chapter_id, title, description, question_count, time_limit, difficulty, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(id, chapterId, title, description || '', questionCount || 10, timeLimit || 15, difficulty || 'Medium', status || 'ACTIVE');
     res.json({ message: 'Quiz created successfully.', quizId: id });
   } catch (err) {
     res.status(500).json({ error: 'Failed to create quiz: ' + err.message });
   }
 });
 
-app.put('/api/admin/quizzes/:id', authenticateToken, requireAdmin, (req, res) => {
+app.put('/api/admin/quizzes/:id', authenticateToken, requireAdmin, async (req, res) => {
   const { title, description, questionCount, timeLimit, difficulty, status } = req.body;
   try {
-    const existing = db.prepare('SELECT * FROM quizzes WHERE id = ?').get(req.params.id);
+    const existing = await db.prepare('SELECT * FROM quizzes WHERE id = ?').get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Quiz not found.' });
-    db.prepare('UPDATE quizzes SET title = ?, description = ?, question_count = ?, time_limit = ?, difficulty = ?, status = ? WHERE id = ?').run(
+    await db.prepare('UPDATE quizzes SET title = ?, description = ?, question_count = ?, time_limit = ?, difficulty = ?, status = ? WHERE id = ?').run(
       title || existing.title,
       description !== undefined ? description : existing.description,
       questionCount ? parseInt(questionCount) : existing.question_count,
@@ -706,30 +668,30 @@ app.put('/api/admin/quizzes/:id', authenticateToken, requireAdmin, (req, res) =>
   }
 });
 
-app.delete('/api/admin/quizzes/:id', authenticateToken, requireAdmin, (req, res) => {
+app.delete('/api/admin/quizzes/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    db.prepare('DELETE FROM quizzes WHERE id = ?').run(req.params.id);
+    await db.prepare('DELETE FROM quizzes WHERE id = ?').run(req.params.id);
     res.json({ message: 'Quiz deleted successfully.' });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to delete quiz.' });
+    res.status(500).json({ error: 'Failed to delete quiz: ' + err.message });
   }
 });
 
 // Admin Question CRUD
-app.post('/api/admin/questions', authenticateToken, requireAdmin, (req, res) => {
+app.post('/api/admin/questions', authenticateToken, requireAdmin, async (req, res) => {
   const { quizId, questionText, imageUrl, optionA, optionB, optionC, optionD, correctAnswer, explanation } = req.body;
   if (!quizId || !questionText || !optionA || !optionB || !optionC || !optionD || !correctAnswer) {
     return res.status(400).json({ error: 'Target Quiz, Question text, Options A-D, and Correct Answer are required.' });
   }
 
   try {
-    const quizExists = db.prepare('SELECT id FROM quizzes WHERE id = ?').get(quizId);
+    const quizExists = await db.prepare('SELECT id FROM quizzes WHERE id = ?').get(quizId);
     if (!quizExists) {
       return res.status(404).json({ error: 'Selected quiz target does not exist. Please create or select a valid quiz.' });
     }
 
     const id = 'q_' + Date.now() + '_' + Math.round(Math.random() * 1000);
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO questions (id, quiz_id, question_text, image_url, option_a, option_b, option_c, option_d, correct_answer, explanation)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, quizId, questionText.trim(), imageUrl || '', optionA.trim(), optionB.trim(), optionC.trim(), optionD.trim(), correctAnswer.trim().toUpperCase(), (explanation || '').trim());
@@ -741,12 +703,12 @@ app.post('/api/admin/questions', authenticateToken, requireAdmin, (req, res) => 
   }
 });
 
-app.put('/api/admin/questions/:id', authenticateToken, requireAdmin, (req, res) => {
+app.put('/api/admin/questions/:id', authenticateToken, requireAdmin, async (req, res) => {
   const { questionText, imageUrl, optionA, optionB, optionC, optionD, correctAnswer, explanation } = req.body;
   try {
-    const existing = db.prepare('SELECT * FROM questions WHERE id = ?').get(req.params.id);
+    const existing = await db.prepare('SELECT * FROM questions WHERE id = ?').get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Question not found.' });
-    db.prepare(`
+    await db.prepare(`
       UPDATE questions
       SET question_text = ?, image_url = ?, option_a = ?, option_b = ?, option_c = ?, option_d = ?, correct_answer = ?, explanation = ?
       WHERE id = ?
@@ -767,19 +729,20 @@ app.put('/api/admin/questions/:id', authenticateToken, requireAdmin, (req, res) 
   }
 });
 
-app.delete('/api/admin/questions/:id', authenticateToken, requireAdmin, (req, res) => {
+app.delete('/api/admin/questions/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const question = db.prepare('SELECT quiz_id FROM questions WHERE id = ?').get(req.params.id);
-    db.prepare('DELETE FROM questions WHERE id = ?').run(req.params.id);
+    const question = await db.prepare('SELECT quiz_id FROM questions WHERE id = ?').get(req.params.id);
+    await db.prepare('DELETE FROM questions WHERE id = ?').run(req.params.id);
 
     if (question) {
-      const count = db.prepare('SELECT COUNT(*) AS c FROM questions WHERE quiz_id = ?').get(question.quiz_id).c;
-      db.prepare('UPDATE quizzes SET question_count = ? WHERE id = ?').run(count, question.quiz_id);
+      const countResult = await db.prepare('SELECT COUNT(*) AS c FROM questions WHERE quiz_id = ?').get(question.quiz_id);
+      const count = countResult ? countResult.c : 0;
+      await db.prepare('UPDATE quizzes SET question_count = ? WHERE id = ?').run(count, question.quiz_id);
     }
 
     res.json({ message: 'Question deleted successfully.' });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to delete question.' });
+    res.status(500).json({ error: 'Failed to delete question: ' + err.message });
   }
 });
 
@@ -810,10 +773,10 @@ if (!process.env.VERCEL) {
   app.listen(PORT, () => {
     console.log(`===================================================`);
     console.log(`CLN Questions Platform API Server running on port ${PORT}`);
+    console.log(`Database connected via Turso Cloud / LibSQL`);
     console.log(`URL: http://localhost:${PORT}`);
     console.log(`===================================================`);
   });
 }
 
 module.exports = app;
-
