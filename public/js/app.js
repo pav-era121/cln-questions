@@ -79,8 +79,10 @@ const app = {
     // View specific logic
     if (viewName === 'home') {
       this.renderHomeCourses();
+      this.loadCourses().then(() => this.renderHomeCourses());
     } else if (viewName === 'courses') {
       this.renderCoursesList();
+      this.loadCourses().then(() => this.renderCoursesList());
     } else if (viewName === 'dashboard') {
       this.loadStudentDashboard();
     } else if (viewName === 'history') {
@@ -178,38 +180,46 @@ const app = {
 
     const featured = this.state.courses.slice(0, 6);
 
-    grid.innerHTML = featured.map(c => `
+    grid.innerHTML = featured.map(c => {
+      const chCount = Number(c.chapter_count ?? 0);
+      const chLabel = chCount === 1 ? '1 Chapter' : `${chCount} Chapters`;
+      return `
       <div class="course-card">
         <img class="course-img" src="${c.image_url || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500'}" alt="${c.name}">
         <div class="course-body">
           <h3 class="course-title">${c.name}</h3>
           <p class="course-desc">${c.description}</p>
           <div class="course-meta">
-            <span>📚 ${c.chapter_count || 1} Chapters</span>
+            <span>📚 ${chLabel}</span>
             <button class="btn btn-primary btn-sm" onclick="app.showCourseDetail('${c.id}')">Practice →</button>
           </div>
         </div>
       </div>
-    `).join('');
+    `;
+    }).join('');
   },
 
   renderCoursesList() {
     const grid = document.getElementById('courses-list-grid');
     if (!grid) return;
 
-    grid.innerHTML = this.state.courses.map(c => `
+    grid.innerHTML = this.state.courses.map(c => {
+      const chCount = Number(c.chapter_count ?? 0);
+      const chLabel = chCount === 1 ? '1 Chapter' : `${chCount} Chapters`;
+      return `
       <div class="course-card">
         <img class="course-img" src="${c.image_url || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500'}" alt="${c.name}">
         <div class="course-body">
           <h3 class="course-title">${c.name}</h3>
           <p class="course-desc">${c.description}</p>
           <div class="course-meta">
-            <span>📚 ${c.chapter_count || 1} Chapters</span>
+            <span>📚 ${chLabel}</span>
             <button class="btn btn-primary btn-sm" onclick="app.showCourseDetail('${c.id}')">Explore Chapters →</button>
           </div>
         </div>
       </div>
-    `).join('');
+    `;
+    }).join('');
   },
 
   async showCourseDetail(courseId) {
@@ -992,6 +1002,7 @@ const app = {
     try {
       await API.createChapter({ courseId, name, description, imageUrl });
       this.closeModal();
+      await this.loadCourses();
       await this.loadAdminContentTree();
       alert('Chapter created successfully!');
     } catch (err) {
@@ -1071,6 +1082,7 @@ const app = {
     try {
       await API.updateChapter(chapterId, { name, description, chapterOrder, imageUrl, status: 'ACTIVE' });
       this.closeModal();
+      await this.loadCourses();
       await this.loadAdminContentTree();
       alert('Chapter updated successfully!');
     } catch (err) {
@@ -1087,6 +1099,7 @@ const app = {
 
     try {
       await API.deleteChapter(chapterId);
+      await this.loadCourses();
       await this.loadAdminContentTree();
       alert('Chapter deleted successfully.');
     } catch (err) {
