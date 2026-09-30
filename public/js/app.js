@@ -182,7 +182,7 @@ const app = {
 
     grid.innerHTML = featured.map(c => {
       const chCount = Number(c.chapter_count ?? 0);
-      const chLabel = chCount === 1 ? '1 Chapter' : `${chCount} Chapters`;
+      const chLabel = chCount <= 1 ? `${chCount} Chapter` : `${chCount} Chapters`;
       return `
       <div class="course-card">
         <img class="course-img" src="${c.image_url || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500'}" alt="${c.name}">
@@ -205,7 +205,7 @@ const app = {
 
     grid.innerHTML = this.state.courses.map(c => {
       const chCount = Number(c.chapter_count ?? 0);
-      const chLabel = chCount === 1 ? '1 Chapter' : `${chCount} Chapters`;
+      const chLabel = chCount <= 1 ? `${chCount} Chapter` : `${chCount} Chapters`;
       return `
       <div class="course-card">
         <img class="course-img" src="${c.image_url || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500'}" alt="${c.name}">
