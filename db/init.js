@@ -74,6 +74,7 @@ db.exec(`
     option_d TEXT NOT NULL,
     correct_answer TEXT NOT NULL,
     explanation TEXT,
+    difficulty TEXT DEFAULT 'Medium',
     FOREIGN KEY (quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE
   );
 

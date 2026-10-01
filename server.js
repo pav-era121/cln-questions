@@ -43,6 +43,11 @@ app.use(express.static(path.join(__dirname, 'public')));
   } catch (e) {
     // Column already exists, safe to ignore
   }
+  try {
+    await db.exec("ALTER TABLE questions ADD COLUMN difficulty TEXT DEFAULT 'Medium';");
+  } catch (e) {
+    // Column already exists, safe to ignore
+  }
 })();
 
 // Multer Storage Engine
@@ -329,7 +334,7 @@ app.get('/api/quizzes/:id/start', authenticateToken, verifyActiveUser, async (re
     const course = await db.prepare('SELECT * FROM courses WHERE id = ?').get(chapter.course_id);
 
     const rawQuestions = await db.prepare(`
-      SELECT id, quiz_id, question_text, image_url, option_a, option_b, option_c, option_d
+      SELECT id, quiz_id, question_text, image_url, option_a, option_b, option_c, option_d, difficulty
       FROM questions WHERE quiz_id = ?
     `).all(quiz.id);
 
@@ -434,7 +439,8 @@ app.post('/api/quizzes/:id/submit', authenticateToken, verifyActiveUser, async (
         selectedAnswer: selected,
         correctAnswer: q.correct_answer,
         isCorrect: isCorrect === 1,
-        explanation: q.explanation
+        explanation: q.explanation,
+        difficulty: q.difficulty || 'Medium'
       });
     }
 
@@ -486,13 +492,41 @@ app.get('/api/student/dashboard', authenticateToken, verifyActiveUser, async (re
       LIMIT 5
     `).all(user.id);
 
+    // Difficulty performance breakdown for student
+    const diffStatsRaw = await db.prepare(`
+      SELECT 
+        COALESCE(q.difficulty, 'Medium') AS difficulty,
+        COUNT(qa.id) AS total_attempted,
+        SUM(qa.is_correct) AS total_correct
+      FROM quiz_answers qa
+      JOIN questions q ON qa.question_id = q.id
+      WHERE qa.user_id = ?
+      GROUP BY q.difficulty
+    `).all(user.id);
+
+    const difficultyStats = {
+      Easy: { attempted: 0, correct: 0, accuracy: 0 },
+      Medium: { attempted: 0, correct: 0, accuracy: 0 },
+      Hard: { attempted: 0, correct: 0, accuracy: 0 }
+    };
+
+    for (const row of diffStatsRaw) {
+      const key = ['Easy', 'Medium', 'Hard'].includes(row.difficulty) ? row.difficulty : 'Medium';
+      difficultyStats[key].attempted += Number(row.total_attempted || 0);
+      difficultyStats[key].correct += Number(row.total_correct || 0);
+      difficultyStats[key].accuracy = difficultyStats[key].attempted > 0 
+        ? Math.round((difficultyStats[key].correct / difficultyStats[key].attempted) * 100)
+        : 0;
+    }
+
     res.json({
       user,
       stats: {
         totalXp: user.total_xp,
         quizzesCompleted: attemptsCount ? attemptsCount.count : 0,
         averageScore: Math.round((avgScore && avgScore.avg_perc) || 0),
-        bestScore: Math.round((bestScore && bestScore.max_perc) || 0)
+        bestScore: Math.round((bestScore && bestScore.max_perc) || 0),
+        difficultyStats
       },
       recentAttempts
     });
@@ -534,6 +568,65 @@ app.get('/api/admin/stats', authenticateToken, requireAdmin, async (req, res) =>
     const avgScoreResult = await db.prepare("SELECT AVG(percentage) AS avg_perc FROM quiz_attempts WHERE completed_at IS NOT NULL").get();
     const avgScore = avgScoreResult && avgScoreResult.avg_perc ? avgScoreResult.avg_perc : 0;
 
+    // Platform-wide difficulty stats
+    const adminDiffRaw = await db.prepare(`
+      SELECT 
+        COALESCE(q.difficulty, 'Medium') AS difficulty,
+        COUNT(qa.id) AS total_attempted,
+        SUM(qa.is_correct) AS total_correct
+      FROM quiz_answers qa
+      JOIN questions q ON qa.question_id = q.id
+      GROUP BY q.difficulty
+    `).all();
+
+    const difficultyStats = {
+      Easy: { attempted: 0, correct: 0, accuracy: 0 },
+      Medium: { attempted: 0, correct: 0, accuracy: 0 },
+      Hard: { attempted: 0, correct: 0, accuracy: 0 }
+    };
+    for (const r of adminDiffRaw) {
+      const key = ['Easy', 'Medium', 'Hard'].includes(r.difficulty) ? r.difficulty : 'Medium';
+      difficultyStats[key].attempted += Number(r.total_attempted || 0);
+      difficultyStats[key].correct += Number(r.total_correct || 0);
+      difficultyStats[key].accuracy = difficultyStats[key].attempted > 0 
+        ? Math.round((difficultyStats[key].correct / difficultyStats[key].attempted) * 100)
+        : 0;
+    }
+
+    // Difficulty breakdown by course
+    const courseDiffRaw = await db.prepare(`
+      SELECT 
+        c.name AS course_name,
+        COALESCE(q.difficulty, 'Medium') AS difficulty,
+        COUNT(qa.id) AS total_attempted,
+        SUM(qa.is_correct) AS total_correct
+      FROM quiz_answers qa
+      JOIN questions q ON qa.question_id = q.id
+      JOIN quizzes qz ON q.quiz_id = qz.id
+      JOIN chapters ch ON qz.chapter_id = ch.id
+      JOIN courses c ON ch.course_id = c.id
+      GROUP BY c.id, q.difficulty
+    `).all();
+
+    const courseDifficultyBreakdown = {};
+    for (const cRow of courseDiffRaw) {
+      if (!courseDifficultyBreakdown[cRow.course_name]) {
+        courseDifficultyBreakdown[cRow.course_name] = {
+          Easy: { attempted: 0, correct: 0, accuracy: 0 },
+          Medium: { attempted: 0, correct: 0, accuracy: 0 },
+          Hard: { attempted: 0, correct: 0, accuracy: 0 }
+        };
+      }
+      const diffKey = ['Easy', 'Medium', 'Hard'].includes(cRow.difficulty) ? cRow.difficulty : 'Medium';
+      const att = Number(cRow.total_attempted || 0);
+      const corr = Number(cRow.total_correct || 0);
+      courseDifficultyBreakdown[cRow.course_name][diffKey] = {
+        attempted: att,
+        correct: corr,
+        accuracy: att > 0 ? Math.round((corr / att) * 100) : 0
+      };
+    }
+
     res.json({
       stats: {
         totalStudents,
@@ -541,7 +634,9 @@ app.get('/api/admin/stats', authenticateToken, requireAdmin, async (req, res) =>
         suspendedStudents,
         totalAttempts,
         totalQuestions,
-        averageScore: Math.round(avgScore)
+        averageScore: Math.round(avgScore),
+        difficultyStats,
+        courseDifficultyBreakdown
       }
     });
   } catch (err) {
@@ -670,7 +765,7 @@ app.get('/api/admin/content-tree', authenticateToken, requireAdmin, async (req, 
     const courses = await db.prepare("SELECT * FROM courses ORDER BY created_at ASC").all();
     const chapters = await db.prepare("SELECT * FROM chapters ORDER BY chapter_order ASC, created_at ASC").all();
     const quizzes = await db.prepare("SELECT * FROM quizzes ORDER BY created_at ASC").all();
-    const questions = await db.prepare("SELECT id, quiz_id, question_text, image_url, option_a, option_b, option_c, option_d, correct_answer, explanation FROM questions").all();
+    const questions = await db.prepare("SELECT id, quiz_id, question_text, image_url, option_a, option_b, option_c, option_d, correct_answer, explanation, difficulty FROM questions").all();
 
     res.json({ courses, chapters, quizzes, questions });
   } catch (err) {
@@ -723,7 +818,7 @@ app.delete('/api/admin/quizzes/:id', authenticateToken, requireAdmin, async (req
 
 // Admin Question CRUD
 app.post('/api/admin/questions', authenticateToken, requireAdmin, async (req, res) => {
-  const { quizId, questionText, imageUrl, optionA, optionB, optionC, optionD, correctAnswer, explanation } = req.body;
+  const { quizId, questionText, imageUrl, optionA, optionB, optionC, optionD, correctAnswer, explanation, difficulty } = req.body;
   if (!quizId || !questionText || !optionA || !optionB || !optionC || !optionD || !correctAnswer) {
     return res.status(400).json({ error: 'Target Quiz, Question text, Options A-D, and Correct Answer are required.' });
   }
@@ -734,11 +829,12 @@ app.post('/api/admin/questions', authenticateToken, requireAdmin, async (req, re
       return res.status(404).json({ error: 'Selected quiz target does not exist. Please create or select a valid quiz.' });
     }
 
+    const validDifficulty = ['Easy', 'Medium', 'Hard'].includes(difficulty) ? difficulty : 'Medium';
     const id = 'q_' + Date.now() + '_' + Math.round(Math.random() * 1000);
     await db.prepare(`
-      INSERT INTO questions (id, quiz_id, question_text, image_url, option_a, option_b, option_c, option_d, correct_answer, explanation)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, quizId, questionText.trim(), imageUrl || '', optionA.trim(), optionB.trim(), optionC.trim(), optionD.trim(), correctAnswer.trim().toUpperCase(), (explanation || '').trim());
+      INSERT INTO questions (id, quiz_id, question_text, image_url, option_a, option_b, option_c, option_d, correct_answer, explanation, difficulty)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, quizId, questionText.trim(), imageUrl || '', optionA.trim(), optionB.trim(), optionC.trim(), optionD.trim(), correctAnswer.trim().toUpperCase(), (explanation || '').trim(), validDifficulty);
 
     // Automatically keep quiz question_count in sync with bank count so new questions are served by default
     const countResult = await db.prepare('SELECT COUNT(*) AS c FROM questions WHERE quiz_id = ?').get(quizId);
@@ -753,13 +849,13 @@ app.post('/api/admin/questions', authenticateToken, requireAdmin, async (req, re
 });
 
 app.put('/api/admin/questions/:id', authenticateToken, requireAdmin, async (req, res) => {
-  const { questionText, imageUrl, optionA, optionB, optionC, optionD, correctAnswer, explanation } = req.body;
+  const { questionText, imageUrl, optionA, optionB, optionC, optionD, correctAnswer, explanation, difficulty } = req.body;
   try {
     const existing = await db.prepare('SELECT * FROM questions WHERE id = ?').get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Question not found.' });
     await db.prepare(`
       UPDATE questions
-      SET question_text = ?, image_url = ?, option_a = ?, option_b = ?, option_c = ?, option_d = ?, correct_answer = ?, explanation = ?
+      SET question_text = ?, image_url = ?, option_a = ?, option_b = ?, option_c = ?, option_d = ?, correct_answer = ?, explanation = ?, difficulty = ?
       WHERE id = ?
     `).run(
       questionText || existing.question_text,
@@ -770,6 +866,7 @@ app.put('/api/admin/questions/:id', authenticateToken, requireAdmin, async (req,
       optionD || existing.option_d,
       (correctAnswer || existing.correct_answer).toUpperCase(),
       explanation !== undefined ? explanation : existing.explanation,
+      difficulty || existing.difficulty || 'Medium',
       req.params.id
     );
     res.json({ message: 'Question updated successfully.' });

@@ -543,6 +543,14 @@
           </div>
         </div>
 
+        <!-- DIFFICULTY MASTERY SECTION -->
+        <div style="margin-bottom:32px;">
+          <h3 style="font-size:1.2rem; font-weight:700; color:var(--navy); margin-bottom:14px;">Mastery by Question Difficulty</h3>
+          <div id="dash-difficulty-stats" class="diff-analytics-grid">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+
         <div class="card">
           <h3 style="font-size:1.2rem; font-weight:700; color:var(--navy); margin-bottom:16px;">Recent Quiz Attempts</h3>
           <div id="dash-recent-attempts">
@@ -638,6 +646,25 @@
           <div class="card" style="padding:16px;">
             <div style="font-size:0.8rem; font-weight:700; color:var(--text-muted);">SUSPENDED USERS</div>
             <div id="admin-stat-suspended" style="font-size:1.8rem; font-weight:900; color:var(--red);">0</div>
+          </div>
+        </div>
+
+        <!-- ADMIN DIFFICULTY ANALYTICS -->
+        <div class="card" style="margin-bottom:28px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:8px;">
+            <div>
+              <h3 style="font-size:1.15rem; font-weight:700; color:var(--navy); margin-bottom:4px;">Platform Accuracy by Question Difficulty</h3>
+              <p style="font-size:0.82rem; color:var(--text-muted); margin:0;">Track student performance across Foundation (Easy), Application (Medium), and Challenge (Hard) problems.</p>
+            </div>
+          </div>
+          <div id="admin-difficulty-overview" class="diff-analytics-grid" style="margin-bottom:20px;">
+            <!-- Dynamically populated -->
+          </div>
+          <div id="admin-course-diff-container" style="border-top:1px solid var(--border); padding-top:16px; display:none;">
+            <h4 style="font-size:0.95rem; font-weight:700; color:var(--navy); margin-bottom:12px;">Difficulty Breakdown by Course</h4>
+            <div id="admin-course-diff-table-wrapper" style="overflow-x:auto;">
+              <!-- Course breakdown table -->
+            </div>
           </div>
         </div>
 

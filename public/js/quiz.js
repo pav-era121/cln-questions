@@ -81,6 +81,21 @@ const quizEngine = {
     document.getElementById('quiz-title-display').innerText = this.quiz.title;
     document.getElementById('question-progress-text').innerText = `Question ${this.currentIndex + 1} of ${this.questions.length}`;
 
+    // Handle Difficulty Badge (visible in practice, hidden in exam simulation mode)
+    const diffBadge = document.getElementById('quiz-difficulty-badge');
+    if (diffBadge) {
+      const isExam = (this.quiz.title && this.quiz.title.toLowerCase().includes('exam')) ||
+                     (this.quiz.difficulty && this.quiz.difficulty.toLowerCase().includes('exam'));
+      if (isExam) {
+        diffBadge.style.display = 'none';
+      } else {
+        const qDiff = q.difficulty || 'Medium';
+        diffBadge.style.display = 'inline-flex';
+        diffBadge.className = `difficulty-badge difficulty-${qDiff.toLowerCase()}`;
+        diffBadge.innerText = qDiff;
+      }
+    }
+
     const textEl = document.getElementById('question-text-display');
     textEl.innerText = q.question_text;
 

@@ -1061,3 +1061,58 @@ body {
   }
 }
 
+/* DIFFICULTY BADGES & ANALYTICS */
+.difficulty-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  color: #ffffff !important;
+  text-transform: uppercase;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  vertical-align: middle;
+  line-height: 1.2;
+}
+
+.difficulty-badge.difficulty-easy {
+  background: linear-gradient(135deg, #059669 0%, #10B981 100%);
+}
+
+.difficulty-badge.difficulty-medium {
+  background: linear-gradient(135deg, #2563EB 0%, #059669 100%);
+}
+
+.difficulty-badge.difficulty-hard {
+  background: linear-gradient(135deg, #DC2626 0%, #F59E0B 100%);
+}
+
+.difficulty-badge.difficulty-unclassified {
+  background: linear-gradient(135deg, #64748B 0%, #94A3B8 100%);
+}
+
+.diff-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.diff-stat-card {
+  padding: 14px;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+}
+
+@media (max-width: 640px) {
+  .diff-analytics-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

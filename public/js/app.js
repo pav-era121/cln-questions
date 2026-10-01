@@ -352,8 +352,11 @@ const app = {
     const container = document.getElementById('review-questions-list');
     container.innerHTML = results.review.map((item, idx) => `
       <div class="card" style="border-left: 4px solid ${item.isCorrect ? 'var(--green)' : 'var(--red)'};">
-        <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
-          <span style="font-weight:700; color:var(--text-muted);">Question ${idx + 1}</span>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-weight:700; color:var(--text-muted);">Question ${idx + 1}</span>
+            <span class="difficulty-badge difficulty-${(item.difficulty || 'medium').toLowerCase()}">${item.difficulty || 'Medium'}</span>
+          </div>
           <span class="status-badge ${item.isCorrect ? 'status-active' : 'status-suspended'}">
             ${item.isCorrect ? '✓ CORRECT (+10 XP)' : '✗ INCORRECT (0 XP)'}
           </span>
@@ -389,6 +392,44 @@ const app = {
       document.getElementById('dash-xp').innerText = `${stats.totalXp} XP`;
       document.getElementById('dash-quizzes-count').innerText = stats.quizzesCompleted;
       document.getElementById('dash-avg-score').innerText = `${stats.averageScore}%`;
+
+      // Render Difficulty Mastery Cards
+      const diffContainer = document.getElementById('dash-difficulty-stats');
+      if (diffContainer) {
+        const diffStats = stats.difficultyStats || {
+          Easy: { attempted: 0, correct: 0, accuracy: 0 },
+          Medium: { attempted: 0, correct: 0, accuracy: 0 },
+          Hard: { attempted: 0, correct: 0, accuracy: 0 }
+        };
+
+        const levels = [
+          { key: 'Easy', label: 'Foundation', badgeClass: 'difficulty-easy', subtitle: 'Core definitions & basics' },
+          { key: 'Medium', label: 'Application', badgeClass: 'difficulty-medium', subtitle: 'Standard reasoning & scenarios' },
+          { key: 'Hard', label: 'Challenge', badgeClass: 'difficulty-hard', subtitle: 'Complex multi-step problems' }
+        ];
+
+        diffContainer.innerHTML = levels.map(lvl => {
+          const s = diffStats[lvl.key] || { attempted: 0, correct: 0, accuracy: 0 };
+          return `
+            <div class="diff-stat-card card">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <span class="difficulty-badge ${lvl.badgeClass}">${lvl.key} • ${lvl.label}</span>
+                <span style="font-size:0.8rem; font-weight:600; color:var(--text-muted);">${s.attempted} attempted</span>
+              </div>
+              <div style="font-size:2rem; font-weight:900; color:var(--navy); margin-bottom:4px;">
+                ${s.accuracy}%
+              </div>
+              <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:10px;">
+                ${s.correct} of ${s.attempted} correct
+              </div>
+              <div style="background:var(--bg-main); height:7px; border-radius:4px; overflow:hidden;">
+                <div style="background:var(--blue); width:${Math.min(100, Math.max(0, s.accuracy))}%; height:100%; border-radius:4px; transition:width 0.4s ease;"></div>
+              </div>
+              <div style="font-size:0.75rem; color:var(--text-muted); margin-top:8px;">${lvl.subtitle}</div>
+            </div>
+          `;
+        }).join('');
+      }
 
       const recentEl = document.getElementById('dash-recent-attempts');
       if (recent.length === 0) {
@@ -486,6 +527,88 @@ const app = {
       document.getElementById('admin-stat-students').innerText = s.totalStudents;
       document.getElementById('admin-stat-attempts').innerText = s.totalAttempts;
       document.getElementById('admin-stat-suspended').innerText = s.suspendedStudents;
+
+      // Platform-wide difficulty analytics
+      const diffOverviewEl = document.getElementById('admin-difficulty-overview');
+      if (diffOverviewEl && statsData.difficultyStats) {
+        const ds = statsData.difficultyStats;
+        const levels = [
+          { key: 'Easy', label: 'Foundation', badgeClass: 'difficulty-easy' },
+          { key: 'Medium', label: 'Application', badgeClass: 'difficulty-medium' },
+          { key: 'Hard', label: 'Challenge', badgeClass: 'difficulty-hard' }
+        ];
+
+        diffOverviewEl.innerHTML = levels.map(lvl => {
+          const st = ds[lvl.key] || { attempted: 0, correct: 0, accuracy: 0 };
+          return `
+            <div class="diff-stat-card card">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <span class="difficulty-badge ${lvl.badgeClass}">${lvl.key} • ${lvl.label}</span>
+                <span style="font-size:0.8rem; font-weight:600; color:var(--text-muted);">${st.attempted} attempts</span>
+              </div>
+              <div style="font-size:2rem; font-weight:900; color:var(--navy); margin-bottom:4px;">
+                ${st.accuracy}%
+              </div>
+              <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:8px;">
+                ${st.correct} of ${st.attempted} answers correct
+              </div>
+              <div style="background:var(--bg-main); height:7px; border-radius:4px; overflow:hidden;">
+                <div style="background:var(--blue); width:${Math.min(100, Math.max(0, st.accuracy))}%; height:100%; border-radius:4px;"></div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      // Course-level difficulty breakdown table
+      const courseDiffContainer = document.getElementById('admin-course-diff-container');
+      const courseDiffWrapper = document.getElementById('admin-course-diff-table-wrapper');
+      if (courseDiffContainer && courseDiffWrapper && statsData.courseDifficultyBreakdown) {
+        const courses = Object.keys(statsData.courseDifficultyBreakdown);
+        if (courses.length > 0) {
+          courseDiffContainer.style.display = 'block';
+          courseDiffWrapper.innerHTML = `
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Course</th>
+                  <th>Easy (Foundation)</th>
+                  <th>Medium (Application)</th>
+                  <th>Hard (Challenge)</th>
+                  <th>Total Attempts</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${courses.map(courseName => {
+                  const cb = statsData.courseDifficultyBreakdown[courseName];
+                  const easyAtt = cb.Easy ? cb.Easy.attempted : 0;
+                  const medAtt = cb.Medium ? cb.Medium.attempted : 0;
+                  const hardAtt = cb.Hard ? cb.Hard.attempted : 0;
+                  const totalCourseAtt = easyAtt + medAtt + hardAtt;
+
+                  const formatAcc = (diffObj) => {
+                    if (!diffObj || diffObj.attempted === 0) return '<span style="color:var(--text-muted); font-size:0.82rem;">No attempts</span>';
+                    const color = diffObj.accuracy >= 75 ? 'var(--green)' : (diffObj.accuracy >= 50 ? '#D97706' : 'var(--red)');
+                    return `<strong style="color:${color}; font-size:0.95rem;">${diffObj.accuracy}%</strong> <span style="font-size:0.75rem; color:var(--text-muted);">(${diffObj.correct}/${diffObj.attempted})</span>`;
+                  };
+
+                  return `
+                    <tr>
+                      <td><strong>${this.escapeHtml(courseName)}</strong></td>
+                      <td>${formatAcc(cb.Easy)}</td>
+                      <td>${formatAcc(cb.Medium)}</td>
+                      <td>${formatAcc(cb.Hard)}</td>
+                      <td><strong>${totalCourseAtt}</strong></td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          `;
+        } else {
+          courseDiffContainer.style.display = 'none';
+        }
+      }
 
       await this.loadAdminUsers();
       await this.loadAdminContentTree();
@@ -740,8 +863,9 @@ const app = {
                               <div style="background:var(--bg-main); padding:10px 14px; border-radius:6px; margin-bottom:8px; border:1px solid var(--border);">
                                 <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
                                   <div style="flex:1;">
-                                    <div style="font-size:0.9rem; font-weight:600; color:var(--navy); margin-bottom:6px;">
-                                      <strong>${idx + 1}.</strong> ${this.escapeHtml(quest.question_text)}
+                                    <div style="font-size:0.9rem; font-weight:600; color:var(--navy); margin-bottom:6px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                                      <span><strong>${idx + 1}.</strong> ${this.escapeHtml(quest.question_text)}</span>
+                                      <span class="difficulty-badge difficulty-${(quest.difficulty || 'medium').toLowerCase()}" style="font-size:0.7rem; padding:2px 8px; flex-shrink:0;">${quest.difficulty || 'Medium'}</span>
                                     </div>
                                     <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:6px; font-size:0.82rem; margin-bottom:6px;">
                                       <div style="${quest.correct_answer === 'A' ? 'font-weight:700; color:var(--green); background:var(--green-soft); padding:3px 8px; border-radius:4px;' : 'color:var(--text-muted); padding:3px 8px;'}">
@@ -1384,7 +1508,7 @@ const app = {
             </div>
           </div>
 
-          <div class="grid-2-compact" style="margin-bottom:0;">
+          <div class="grid-3-compact" style="margin-bottom:0;">
             <div class="form-group" style="margin-bottom:0;">
               <label class="form-label" style="font-size:0.8rem; color:var(--green);">Correct Answer Choice</label>
               <select id="m-q-correct" class="form-input" style="padding:6px 10px; font-size:0.88rem;" required>
@@ -1392,6 +1516,15 @@ const app = {
                 <option value="B">Option B</option>
                 <option value="C">Option C</option>
                 <option value="D">Option D</option>
+              </select>
+            </div>
+
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label" style="font-size:0.8rem; color:var(--blue); font-weight:700;">Difficulty *</label>
+              <select id="m-q-diff" class="form-input" style="padding:6px 10px; font-size:0.88rem;" required>
+                <option value="Easy">Easy — Foundation</option>
+                <option value="Medium" selected>Medium — Application</option>
+                <option value="Hard">Hard — Challenge</option>
               </select>
             </div>
 
@@ -1463,6 +1596,7 @@ const app = {
     const optionC = document.getElementById('m-q-optc').value;
     const optionD = document.getElementById('m-q-optd').value;
     const correctAnswer = document.getElementById('m-q-correct').value;
+    const difficulty = document.getElementById('m-q-diff').value;
     const explanation = document.getElementById('m-q-exp').value;
 
     if (!quizId) {
@@ -1475,7 +1609,7 @@ const app = {
 
     try {
       await API.createQuestion({
-        quizId, questionText, optionA, optionB, optionC, optionD, correctAnswer, explanation
+        quizId, questionText, optionA, optionB, optionC, optionD, correctAnswer, explanation, difficulty
       });
 
       // Ensure this quiz remains expanded
@@ -1563,7 +1697,7 @@ const app = {
             </div>
           </div>
 
-          <div class="grid-2-compact" style="margin-bottom:0;">
+          <div class="grid-3-compact" style="margin-bottom:0;">
             <div class="form-group" style="margin-bottom:0;">
               <label class="form-label" style="font-size:0.8rem; color:var(--green);">Correct Answer Choice</label>
               <select id="m-edit-q-correct" class="form-input" style="padding:6px 10px; font-size:0.88rem;" required>
@@ -1571,6 +1705,15 @@ const app = {
                 <option value="B" ${quest.correct_answer === 'B' ? 'selected' : ''}>Option B</option>
                 <option value="C" ${quest.correct_answer === 'C' ? 'selected' : ''}>Option C</option>
                 <option value="D" ${quest.correct_answer === 'D' ? 'selected' : ''}>Option D</option>
+              </select>
+            </div>
+
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label" style="font-size:0.8rem; color:var(--blue); font-weight:700;">Difficulty *</label>
+              <select id="m-edit-q-diff" class="form-input" style="padding:6px 10px; font-size:0.88rem;" required>
+                <option value="Easy" ${(quest.difficulty || 'Medium') === 'Easy' ? 'selected' : ''}>Easy — Foundation</option>
+                <option value="Medium" ${(quest.difficulty || 'Medium') === 'Medium' ? 'selected' : ''}>Medium — Application</option>
+                <option value="Hard" ${(quest.difficulty || 'Medium') === 'Hard' ? 'selected' : ''}>Hard — Challenge</option>
               </select>
             </div>
 
@@ -1602,11 +1745,12 @@ const app = {
     const optionC = document.getElementById('m-edit-q-optc').value;
     const optionD = document.getElementById('m-edit-q-optd').value;
     const correctAnswer = document.getElementById('m-edit-q-correct').value;
+    const difficulty = document.getElementById('m-edit-q-diff').value;
     const explanation = document.getElementById('m-edit-q-exp').value;
 
     try {
       await API.updateQuestion(questionId, {
-        questionText, optionA, optionB, optionC, optionD, correctAnswer, explanation
+        questionText, optionA, optionB, optionC, optionD, correctAnswer, explanation, difficulty
       });
       this.closeModal();
       await this.loadAdminContentTree();
