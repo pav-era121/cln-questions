@@ -14,6 +14,9 @@ const app = {
     this.setupEventListeners();
     this.checkAuth();
     await this.loadCourses();
+    if (typeof arena !== 'undefined' && arena.init) {
+      arena.init();
+    }
     this.showView('home');
   },
 
@@ -76,6 +79,13 @@ const app = {
       targetSection.style.display = 'block';
     }
 
+    // Stop arena polling if navigating away
+    if (typeof arena !== 'undefined' && arena.stopPolling) {
+      if (viewName !== 'arena') {
+        arena.stopPolling();
+      }
+    }
+
     // View specific logic
     if (viewName === 'home') {
       this.renderHomeCourses();
@@ -83,6 +93,10 @@ const app = {
     } else if (viewName === 'courses') {
       this.renderCoursesList();
       this.loadCourses().then(() => this.renderCoursesList());
+    } else if (viewName === 'arena') {
+      if (typeof arena !== 'undefined' && arena.startPolling) {
+        arena.startPolling();
+      }
     } else if (viewName === 'dashboard') {
       this.loadStudentDashboard();
     } else if (viewName === 'history') {
@@ -393,6 +407,40 @@ const app = {
       document.getElementById('dash-quizzes-count').innerText = stats.quizzesCompleted;
       document.getElementById('dash-avg-score').innerText = `${stats.averageScore}%`;
 
+      // Update Sunday Arena dashboard highlight
+      try {
+        const arenaData = await API.getArenaCurrent();
+        if (arenaData && arenaData.hasSession) {
+          const badgeEl = document.getElementById('dash-arena-badge');
+          const titleEl = document.getElementById('dash-arena-title');
+          const timeEl = document.getElementById('dash-arena-timing');
+          const btnEl = document.getElementById('dash-arena-btn');
+
+          if (titleEl) titleEl.innerText = arenaData.title;
+
+          if (arenaData.status === 'ACTIVE') {
+            if (badgeEl) { badgeEl.innerText = '🔴 LIVE ROUND NOW'; badgeEl.style.background = '#e63946'; badgeEl.style.color = '#fff'; }
+            if (timeEl) timeEl.innerText = `Question ${arenaData.currentQuestionIndex + 1} of ${arenaData.totalQuestions} in progress!`;
+            if (btnEl) btnEl.innerText = 'Join Live Round Now →';
+          } else if (arenaData.status === 'LOBBY') {
+            if (badgeEl) { badgeEl.innerText = '🟢 LOBBY OPEN'; badgeEl.style.background = '#10b981'; badgeEl.style.color = '#fff'; }
+            if (timeEl) timeEl.innerText = `${arenaData.participantCount} Freshmen waiting in lobby`;
+            if (btnEl) btnEl.innerText = 'Enter Lobby Now →';
+          } else if (arenaData.status === 'ENDED') {
+            if (badgeEl) { badgeEl.innerText = '🏆 RESULTS REVEALED'; badgeEl.style.background = '#2563eb'; badgeEl.style.color = '#fff'; }
+            if (timeEl) timeEl.innerText = 'Official standings and podium published';
+            if (btnEl) btnEl.innerText = 'View Grand Podium →';
+          } else {
+            const dateStr = new Date(arenaData.scheduledAt).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            if (badgeEl) { badgeEl.innerText = '🏆 SUNDAY ARENA'; badgeEl.style.background = '#ffd166'; badgeEl.style.color = 'var(--navy)'; }
+            if (timeEl) timeEl.innerText = `Starts: ${dateStr}`;
+            if (btnEl) btnEl.innerText = 'View Arena Lobby →';
+          }
+        }
+      } catch (e) {
+        // Safe ignore
+      }
+
       // Render Difficulty Mastery Cards
       const diffContainer = document.getElementById('dash-difficulty-stats');
       if (diffContainer) {
@@ -612,6 +660,33 @@ const app = {
 
       await this.loadAdminUsers();
       await this.loadAdminContentTree();
+
+      // Populate Admin Arena Overview Card & Quick Banner
+      try {
+        const arenaData = await API.adminArenaMonitor();
+        if (arenaData && arenaData.hasSession) {
+          const pill = document.getElementById('admin-arena-badge-pill');
+          const title = document.getElementById('admin-arena-stat-title');
+          const sub = document.getElementById('admin-arena-stat-sub');
+          const quickStatus = document.getElementById('admin-quick-arena-status');
+          const quickTitle = document.getElementById('admin-quick-arena-title');
+
+          if (title) title.innerText = arenaData.title;
+          if (quickTitle) quickTitle.innerText = arenaData.title;
+
+          if (pill) {
+            pill.innerText = arenaData.status;
+            if (arenaData.status === 'ACTIVE') pill.style.background = '#e63946';
+            else if (arenaData.status === 'LOBBY') pill.style.background = '#10b981';
+            else if (arenaData.status === 'ENDED') pill.style.background = '#2563eb';
+            else pill.style.background = '#f59e0b';
+          }
+          if (quickStatus) quickStatus.innerText = `Status: ${arenaData.status} • ${arenaData.participantCount} Joined`;
+          if (sub) sub.innerText = `${arenaData.status} • ${arenaData.totalQuestions} Qs • ${arenaData.participantCount} joined`;
+        }
+      } catch (e) {
+        // Safe ignore
+      }
     } catch (err) {
       alert('Failed to load admin panel: ' + err.message);
     }
@@ -620,8 +695,154 @@ const app = {
   showAdminTab(tabName) {
     document.getElementById('admin-tab-users').style.display = tabName === 'users' ? 'block' : 'none';
     document.getElementById('admin-tab-courses').style.display = tabName === 'courses' ? 'block' : 'none';
+    const arenaTab = document.getElementById('admin-tab-arena');
+    if (arenaTab) arenaTab.style.display = tabName === 'arena' ? 'block' : 'none';
+
+    document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+      btn.classList.remove('btn-primary');
+      btn.classList.add('btn-secondary');
+    });
+    if (event && event.target && event.target.classList.contains('admin-tab-btn')) {
+      event.target.classList.remove('btn-secondary');
+      event.target.classList.add('btn-primary');
+    }
+
     if (tabName === 'courses') {
       this.loadAdminContentTree();
+    } else if (tabName === 'arena') {
+      this.loadAdminArenaTab();
+    }
+  },
+
+  async loadAdminArenaTab() {
+    try {
+      const courseSelect = document.getElementById('m-arena-course');
+      if (courseSelect && courseSelect.options.length <= 1) {
+        courseSelect.innerHTML = '<option value="">All Freshman Courses (Comprehensive)</option>' + 
+          this.state.courses.map(c => `<option value="${c.id}">${this.escapeHtml(c.title)}</option>`).join('');
+      }
+
+      const data = await API.adminArenaMonitor();
+      const container = document.getElementById('admin-arena-live-monitor');
+      if (!container) return;
+
+      if (!data || !data.hasSession) {
+        container.innerHTML = `
+          <div style="text-align:center; padding:24px;">
+            <p style="color:var(--text-muted);">No arena session exists currently. Use the form above to schedule one, or click the Quick Test button.</p>
+          </div>
+        `;
+        return;
+      }
+
+      const leaderboard = data.leaderboard || [];
+
+      container.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
+          <div>
+            <span style="font-size:0.75rem; font-weight:800; text-transform:uppercase; letter-spacing:1px; background:#eff6ff; color:#2563eb; padding:2px 8px; border-radius:6px;">Current Session</span>
+            <h4 style="font-size:1.15rem; font-weight:800; color:var(--navy); margin:4px 0 2px;">${this.escapeHtml(data.title)}</h4>
+            <div style="font-size:0.85rem; color:var(--text-muted);">
+              Status: <strong style="color:#2563eb;">${data.status}</strong> • Questions: <strong>${data.totalQuestions}</strong> • Registered Students: <strong>${data.participantCount}</strong>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            ${data.status === 'SCHEDULED' ? `
+              <button class="btn btn-sm btn-primary" onclick="arena.adminSetStatus('LOBBY'); app.loadAdminArenaTab();">🟢 Open Lobby</button>
+              <button class="btn btn-sm btn-success" style="background:#10b981; color:#fff;" onclick="arena.adminSetStatus('ACTIVE'); app.loadAdminArenaTab();">▶️ Start Contest</button>
+            ` : ''}
+
+            ${data.status === 'LOBBY' ? `
+              <button class="btn btn-sm btn-success" style="background:#10b981; color:#fff;" onclick="arena.adminSetStatus('ACTIVE'); app.loadAdminArenaTab();">▶️ Start Question 1</button>
+              <button class="btn btn-sm btn-secondary" onclick="arena.adminSetStatus('SCHEDULED'); app.loadAdminArenaTab();">Back to Scheduled</button>
+            ` : ''}
+
+            ${data.status === 'ACTIVE' ? `
+              <button class="btn btn-sm btn-primary" onclick="arena.adminNextQuestion(); app.loadAdminArenaTab();">⏭️ Next Question (${data.currentQuestionIndex + 1}/${data.totalQuestions})</button>
+              <button class="btn btn-sm btn-danger" onclick="arena.adminSetStatus('ENDED'); app.loadAdminArenaTab();">🏁 End & Reveal Podium</button>
+            ` : ''}
+
+            ${data.status === 'ENDED' ? `
+              <button class="btn btn-sm btn-primary" onclick="app.showView('arena')">🏆 View Grand Podium</button>
+            ` : ''}
+
+            <button class="btn btn-sm btn-outline" onclick="app.loadAdminArenaTab()">🔄 Refresh Monitor</button>
+          </div>
+        </div>
+
+        ${data.adminHeatmap ? `
+          <div style="background:#fff; border:1px solid var(--border); border-radius:10px; padding:12px 16px; margin-bottom:16px;">
+            <div style="font-size:0.85rem; font-weight:700; color:var(--navy); margin-bottom:8px;">Live Question ${data.currentQuestionIndex + 1} Responses (${data.adminHeatmap.answered} / ${data.adminHeatmap.total} answered):</div>
+            <div style="display:flex; gap:16px; font-size:0.85rem;">
+              <span><strong>A:</strong> ${data.adminHeatmap.A}</span>
+              <span><strong>B:</strong> ${data.adminHeatmap.B}</span>
+              <span><strong>C:</strong> ${data.adminHeatmap.C}</span>
+              <span><strong>D:</strong> ${data.adminHeatmap.D}</span>
+            </div>
+          </div>
+        ` : ''}
+
+        <div>
+          <h5 style="font-size:0.92rem; font-weight:700; color:var(--navy); margin-bottom:8px;">Live Shadow Standings (${leaderboard.length} competitors)</h5>
+          ${leaderboard.length === 0 ? `
+            <p style="font-size:0.85rem; color:var(--text-muted);">No participants have joined yet.</p>
+          ` : `
+            <div style="max-height:220px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;">
+              <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+                <thead style="background:var(--bg-main); border-bottom:1px solid var(--border);">
+                  <tr>
+                    <th style="padding:6px 10px; text-align:left;">Rank</th>
+                    <th style="padding:6px 10px; text-align:left;">Student</th>
+                    <th style="padding:6px 10px; text-align:center;">Score</th>
+                    <th style="padding:6px 10px; text-align:center;">Total Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${leaderboard.map(row => `
+                    <tr style="border-bottom:1px solid var(--border);">
+                      <td style="padding:6px 10px; font-weight:700;">#${row.rank}</td>
+                      <td style="padding:6px 10px;">${this.escapeHtml(row.userName)}</td>
+                      <td style="padding:6px 10px; text-align:center; font-weight:700; color:var(--blue);">${row.totalScore}/${data.totalQuestions}</td>
+                      <td style="padding:6px 10px; text-align:center;">${row.totalTimeFormatted}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          `}
+        </div>
+      `;
+    } catch (err) {
+      console.warn('Failed to load admin arena tab:', err.message);
+    }
+  },
+
+  async handleCreateArenaSession(e) {
+    e.preventDefault();
+    const title = document.getElementById('m-arena-title').value.trim();
+    const courseId = document.getElementById('m-arena-course').value || null;
+    const dateVal = document.getElementById('m-arena-date').value;
+    const questionCount = parseInt(document.getElementById('m-arena-count').value) || 25;
+    const secondsPerQuestion = parseInt(document.getElementById('m-arena-sec').value) || 40;
+
+    let scheduledAt = null;
+    if (dateVal) {
+      scheduledAt = new Date(dateVal).toISOString();
+    }
+
+    try {
+      await API.adminArenaCreate({
+        title,
+        courseId,
+        scheduledAt,
+        questionCount,
+        secondsPerQuestion
+      });
+      alert('New Arena session created and scheduled successfully!');
+      this.loadAdminArenaTab();
+    } catch (err) {
+      alert('Failed to create arena session: ' + err.message);
     }
   },
 

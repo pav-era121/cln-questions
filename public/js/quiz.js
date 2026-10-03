@@ -118,7 +118,7 @@ const quizEngine = {
       { key: 'B', text: q.option_b },
       { key: 'C', text: q.option_c },
       { key: 'D', text: q.option_d }
-    ];
+    ].filter(opt => opt.text && opt.text.trim() !== '');
 
     const currentSelected = this.userAnswers[q.id];
 

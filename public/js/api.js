@@ -234,5 +234,46 @@ const API = {
       method: 'POST',
       body: formData
     });
+  },
+
+  // SUNDAY LIVE ARENA
+  async getArenaCurrent() {
+    return await this.request('/arena/current');
+  },
+
+  async joinArena(sessionId) {
+    return await this.request('/arena/join', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId })
+    });
+  },
+
+  async submitArenaAnswer(sessionId, questionIndex, answerKey) {
+    return await this.request('/arena/submit', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId, questionIndex, answerKey })
+    });
+  },
+
+  async getArenaLeaderboard(sessionId) {
+    return await this.request(`/arena/leaderboard/${sessionId}`);
+  },
+
+  async adminArenaStatus(payload) {
+    return await this.request('/admin/arena/status', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  async adminArenaCreate(payload) {
+    return await this.request('/admin/arena/create', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  async adminArenaMonitor() {
+    return await this.request('/admin/arena/monitor');
   }
 };

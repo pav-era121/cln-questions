@@ -21,6 +21,7 @@
       <ul class="nav-links">
         <li><a class="nav-link active" onclick="app.showView('home')">Home</a></li>
         <li><a class="nav-link" onclick="app.showView('courses')">Courses</a></li>
+        <li><a class="nav-link" onclick="app.showView('arena')" style="display:flex; align-items:center; gap:6px; font-weight:700;"><span>🏆 Sunday Arena</span> <span id="nav-arena-badge" style="background:#e63946; color:#fff; font-size:0.65rem; font-weight:800; padding:2px 6px; border-radius:10px;">SUN 8PM</span></a></li>
         <li class="student-only" style="display:none;"><a class="nav-link" onclick="app.showView('dashboard')">Dashboard</a></li>
         <li class="student-only" style="display:none;"><a class="nav-link" onclick="app.showView('history')">History</a></li>
         <li class="admin-only" style="display:none;"><a class="nav-link" onclick="app.showView('admin')">Admin Panel</a></li>
@@ -439,7 +440,7 @@
             <span id="quiz-difficulty-badge" class="brand-badge" style="background:var(--blue-light);">MEDIUM</span>
           </div>
 
-          <h3 id="question-text-display" style="font-size:1.15rem; font-weight:700; color:var(--navy); margin-bottom:20px; line-height:1.4;">
+          <h3 id="question-text-display" style="font-size:1.15rem; font-weight:700; color:var(--navy); margin-bottom:20px; line-height:1.4; white-space: pre-wrap;">
             <!-- Question text -->
           </h3>
 
@@ -518,9 +519,37 @@
     <!-- 9. STUDENT DASHBOARD VIEW -->
     <section id="view-dashboard" class="view-section" style="display:none; padding:40px 0;">
       <div class="container">
-        <div id="dashboard-welcome" style="margin-bottom:24px;">
+        <div id="dashboard-welcome" style="margin-bottom:20px;">
           <h2 style="font-size:1.8rem; font-weight:800; color:var(--navy);">Welcome Back, <span id="dash-student-name">Student</span>!</h2>
           <p style="color:var(--text-muted);">Here is your freshman practice summary.</p>
+        </div>
+
+        <!-- SUNDAY LIVE ARENA HIGHLIGHT BANNER -->
+        <div class="card" style="background:linear-gradient(135deg, #0f2447 0%, #1e4585 100%); color:#fff; border:none; margin-bottom:28px; padding:22px 24px; position:relative; overflow:hidden; box-shadow:0 8px 24px rgba(15,36,71,0.2);">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+            <div style="max-width:650px;">
+              <div style="display:inline-flex; align-items:center; gap:8px; margin-bottom:8px;">
+                <span class="badge" id="dash-arena-badge" style="background:#ffd166; color:var(--navy); font-size:0.75rem; font-weight:800; padding:3px 10px; border-radius:12px; text-transform:uppercase;">
+                  🏆 SUNDAY LIVE ARENA
+                </span>
+                <span id="dash-arena-timing" style="font-size:0.85rem; color:#ffd166; font-weight:700;">
+                  Every Sunday @ 8:00 PM (EAT)
+                </span>
+              </div>
+              <h3 id="dash-arena-title" style="font-size:1.35rem; font-weight:800; color:#fff; margin-bottom:6px;">
+                Sunday Grand Arena: Freshman Championship
+              </h3>
+              <p style="font-size:0.88rem; color:rgba(255,255,255,0.85); margin:0;">
+                Compete live against freshmen nationwide at the exact same second. Top accuracy & fastest response time crowns the weekly champion!
+              </p>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:12px;">
+              <button class="btn btn-lg" id="dash-arena-btn" style="background:#ffd166; color:var(--navy); font-weight:800; border:none; padding:12px 24px; box-shadow:0 4px 14px rgba(0,0,0,0.2);" onclick="app.showView('arena')">
+                Enter Sunday Arena →
+              </button>
+            </div>
+          </div>
         </div>
 
         <div class="grid-3" style="margin-bottom:32px;">
@@ -634,7 +663,7 @@
         </div>
 
         <!-- ADMIN STATS CARDS -->
-        <div class="grid-3" style="margin-bottom:32px;">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:16px; margin-bottom:28px;">
           <div class="card" style="padding:16px;">
             <div style="font-size:0.8rem; font-weight:700; color:var(--text-muted);">TOTAL STUDENTS</div>
             <div id="admin-stat-students" style="font-size:1.8rem; font-weight:900; color:var(--navy);">0</div>
@@ -646,6 +675,41 @@
           <div class="card" style="padding:16px;">
             <div style="font-size:0.8rem; font-weight:700; color:var(--text-muted);">SUSPENDED USERS</div>
             <div id="admin-stat-suspended" style="font-size:1.8rem; font-weight:900; color:var(--red);">0</div>
+          </div>
+          <div class="card" style="padding:16px; border-left:4px solid #f59e0b; cursor:pointer;" onclick="app.showAdminTab('arena')" title="Click to open Arena Manager">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="font-size:0.8rem; font-weight:700; color:var(--text-muted);">🏆 SUNDAY ARENA</div>
+              <span id="admin-arena-badge-pill" class="badge" style="background:#10b981; color:#fff; font-size:0.65rem; padding:2px 6px; border-radius:10px;">READY</span>
+            </div>
+            <div id="admin-arena-stat-title" style="font-size:1.15rem; font-weight:900; color:var(--navy); margin-top:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Championship</div>
+            <div id="admin-arena-stat-sub" style="font-size:0.78rem; color:var(--text-muted); margin-top:2px;">Scheduled • 25 Questions</div>
+          </div>
+        </div>
+
+        <!-- ADMIN SUNDAY ARENA HIGHLIGHT BANNER -->
+        <div class="card" style="background:linear-gradient(135deg, #1e3a8a 0%, #1e1b4b 100%); color:#fff; border:none; margin-bottom:28px; padding:20px 24px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+            <div>
+              <div style="display:inline-flex; align-items:center; gap:8px; margin-bottom:6px;">
+                <span class="badge" style="background:#ffd166; color:var(--navy); font-size:0.75rem; font-weight:800; padding:2px 8px; border-radius:10px;">LIVE COMPETITION ENGINE</span>
+                <span id="admin-quick-arena-status" style="font-size:0.82rem; color:#ffd166; font-weight:700;">Status: SCHEDULED</span>
+              </div>
+              <h3 id="admin-quick-arena-title" style="font-size:1.25rem; font-weight:800; color:#fff; margin-bottom:4px;">Sunday Grand Arena: Freshman Championship</h3>
+              <p style="font-size:0.85rem; color:rgba(255,255,255,0.8); margin:0;">
+                Live synchronized rapid-fire exam competition for university freshmen with automated real-time rankings and tie-breaking.
+              </p>
+            </div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <button class="btn btn-sm" style="background:#ffd166; color:var(--navy); font-weight:800; border:none;" onclick="app.showAdminTab('arena')">
+                ⚙️ Manage Arena
+              </button>
+              <button class="btn btn-sm" style="background:#10b981; color:#fff; font-weight:700; border:none;" onclick="arena.adminLaunchTestArena()">
+                🚀 1-Click Test Round
+              </button>
+              <button class="btn btn-sm btn-secondary" style="color:#fff; border-color:rgba(255,255,255,0.4);" onclick="app.showView('arena')">
+                👀 View Arena HUD
+              </button>
+            </div>
           </div>
         </div>
 
@@ -669,9 +733,10 @@
         </div>
 
         <!-- ADMIN MANAGEMENT TAB NAV -->
-        <div style="display:flex; gap:12px; margin-bottom:20px;">
+        <div style="display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap;">
           <button class="btn btn-primary btn-sm admin-tab-btn" onclick="app.showAdminTab('users')">Students Management</button>
           <button class="btn btn-secondary btn-sm admin-tab-btn" onclick="app.showAdminTab('courses')">Courses & Content CRUD</button>
+          <button class="btn btn-secondary btn-sm admin-tab-btn" onclick="app.showAdminTab('arena')">🏆 Sunday Arena Manager</button>
         </div>
 
         <!-- TAB 1: USERS TABLE -->
@@ -713,6 +778,72 @@
             <!-- Dynamically populated content tree -->
           </div>
         </div>
+
+        <!-- TAB 3: SUNDAY ARENA CONTROLLER -->
+        <div id="admin-tab-arena" class="card" style="display:none; padding:24px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:12px;">
+            <div>
+              <h3 style="font-size:1.25rem; font-weight:800; color:var(--navy);">🏆 Sunday Live Arena Manager</h3>
+              <p style="font-size:0.85rem; color:var(--text-muted); margin:0;">
+                Configure, schedule, and live-supervise synchronized freshman competitions.
+              </p>
+            </div>
+            <div style="display:flex; gap:10px;">
+              <button class="btn btn-primary btn-sm" onclick="app.showView('arena')">👀 Open Live Arena HUD</button>
+              <button class="btn btn-success btn-sm" style="background:#10b981; color:#fff;" onclick="arena.adminLaunchTestArena()">🚀 Launch 5-Q Test Arena</button>
+            </div>
+          </div>
+
+          <!-- SESSION CREATOR -->
+          <div style="background:var(--bg-main); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:24px;">
+            <h4 style="font-size:1rem; font-weight:700; color:var(--navy); margin-bottom:12px;">Schedule New Arena Competition</h4>
+            <form onsubmit="app.handleCreateArenaSession(event)" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:14px; align-items:flex-end;">
+              <div>
+                <label style="font-size:0.8rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">Competition Title</label>
+                <input type="text" id="m-arena-title" class="form-input" style="padding:8px 12px; font-size:0.9rem;" value="Sunday Grand Arena: Freshman Championship" required>
+              </div>
+
+              <div>
+                <label style="font-size:0.8rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">Course Scope</label>
+                <select id="m-arena-course" class="form-input" style="padding:8px 12px; font-size:0.9rem;">
+                  <option value="">All Freshman Courses (Comprehensive)</option>
+                  <!-- Populated dynamically -->
+                </select>
+              </div>
+
+              <div>
+                <label style="font-size:0.8rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">Scheduled Date & Time (EAT)</label>
+                <input type="datetime-local" id="m-arena-date" class="form-input" style="padding:8px 12px; font-size:0.9rem;">
+              </div>
+
+              <div>
+                <label style="font-size:0.8rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">Question Count</label>
+                <input type="number" id="m-arena-count" class="form-input" style="padding:8px 12px; font-size:0.9rem;" value="25" min="5" max="100" required>
+              </div>
+
+              <div>
+                <label style="font-size:0.8rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">Seconds per Question</label>
+                <input type="number" id="m-arena-sec" class="form-input" style="padding:8px 12px; font-size:0.9rem;" value="40" min="15" max="120" required>
+              </div>
+
+              <div>
+                <button type="submit" class="btn btn-primary" style="width:100%; padding:9px;">Schedule Competition</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- LIVE STATUS & QUICK SUPERVISOR IN ADMIN TAB -->
+          <div id="admin-arena-live-monitor" style="border:1px solid var(--border); border-radius:12px; padding:20px;">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 13. SUNDAY LIVE ARENA VIEW -->
+    <section id="view-arena" class="view-section" style="display:none; padding:32px 0;">
+      <div class="container" id="arena-view-container">
+        <!-- Injected and rendered in real-time by arena.js -->
       </div>
     </section>
 
@@ -770,6 +901,7 @@
   <!-- APPLICATION SCRIPTS -->
   <script src="/js/api.js"></script>
   <script src="/js/quiz.js"></script>
+  <script src="/js/arena.js"></script>
   <script src="/js/app.js"></script>
 </body>
 </html>

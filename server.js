@@ -6,9 +6,13 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const db = require('./db/client');
+const arenaEngine = require('./arenaEngine');
 
 const JWT_SECRET = 'CLN_QUESTIONS_ETHIOPIA_JWT_SECRET_2026';
 const PORT = process.env.PORT || 3000;
+
+// Initialize Arena Engine
+arenaEngine.init(db);
 
 const app = express();
 
@@ -126,6 +130,21 @@ function requireAdmin(req, res, next) {
     return res.status(403).json({ error: 'Admin authorization required.' });
   }
   next();
+}
+
+// Optional Authentication Middleware
+function optionalAuthenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) {
+    req.user = null;
+    return next();
+  }
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) req.user = null;
+    else req.user = user;
+    next();
+  });
 }
 
 // ==========================================
@@ -899,6 +918,99 @@ app.post('/api/admin/upload', authenticateToken, requireAdmin, upload.single('im
   }
   const imageUrl = `/uploads/${req.file.filename}`;
   res.json({ imageUrl, message: 'Image uploaded successfully.' });
+});
+
+// ==========================================
+// 8. SUNDAY LIVE ARENA ENDPOINTS
+// ==========================================
+
+// Get current live or scheduled arena state
+app.get('/api/arena/current', optionalAuthenticateToken, (req, res) => {
+  try {
+    const isAdmin = req.user && req.user.email === 'admin@cln.edu.et';
+    const state = arenaEngine.getPublicState(req.user, isAdmin);
+    res.json(state);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to retrieve arena status: ' + err.message });
+  }
+});
+
+// Join the arena lobby
+app.post('/api/arena/join', authenticateToken, verifyActiveUser, async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    const result = await arenaEngine.joinSession(sessionId, req.user);
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Submit answer for active question
+app.post('/api/arena/submit', authenticateToken, verifyActiveUser, async (req, res) => {
+  try {
+    const { sessionId, questionIndex, answerKey } = req.body;
+    if (!sessionId || questionIndex === undefined || !answerKey) {
+      return res.status(400).json({ error: 'sessionId, questionIndex, and answerKey are required.' });
+    }
+    const result = await arenaEngine.submitAnswer(sessionId, req.user.id, questionIndex, answerKey);
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Get leaderboard for a session
+app.get('/api/arena/leaderboard/:sessionId', (req, res) => {
+  try {
+    const leaderboard = arenaEngine.getLeaderboard();
+    res.json({ leaderboard });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin Arena Status Controller (LOBBY, ACTIVE, NEXT, ENDED)
+app.post('/api/admin/arena/status', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { action, status } = req.body;
+    if (action === 'NEXT') {
+      await arenaEngine.advanceNextQuestion();
+    } else if (status) {
+      await arenaEngine.adminSetStatus(status);
+    }
+    const state = arenaEngine.getPublicState(req.user, true);
+    res.json({ message: 'Arena status updated.', state });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Admin Create/Schedule New Arena Session
+app.post('/api/admin/arena/create', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { title, courseId, scheduledAt, secondsPerQuestion, questionCount } = req.body;
+    const result = await arenaEngine.adminCreateSession({
+      title,
+      courseId,
+      scheduledAt,
+      secondsPerQuestion: parseInt(secondsPerQuestion) || 40,
+      questionCount: parseInt(questionCount) || 20
+    });
+    res.json({ message: 'Arena session created successfully.', result });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Admin Live Monitor Data
+app.get('/api/admin/arena/monitor', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const state = arenaEngine.getPublicState(req.user, true);
+    res.json(state);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Global Error Handling Middleware (Ensures JSON errors, prevents HTML error responses)
