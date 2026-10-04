@@ -813,8 +813,186 @@ const app = {
           `}
         </div>
       `;
+
+      // Also refresh the questions preview queue
+      this.loadAdminArenaQuestionsPreview();
     } catch (err) {
       console.warn('Failed to load admin arena tab:', err.message);
+    }
+  },
+
+  insertArenaSampleQuestions() {
+    const sample = `**Q1.** Mercantilism's contemporary relevance is demonstrated by:
+
+- **A.** The universal adoption of free trade without exception
+- **B.** The global abolition of state intervention in economies
+- **C.** The East Asian economies developmental state approach
+- **D.** The disappearance of trade blocs
+
+**✅ Correct Answer: C**
+**📝 Explanation:** East Asian states fulfilled mercantilist roles through strategic industrial development.
+
+---
+
+**Q2.** The shift from comparative advantage to competitive advantage is driven by:
+
+- **A.** The growth of MNCs and government and corporate policies
+- **B.** The abandonment of trade theory by all economists
+- **C.** The universal adoption of autarky
+- **D.** The disappearance of multinational corporations
+
+**✅ Correct Answer: A**
+**📝 Explanation:** Multinational corporations and state policies influence trade flows.
+
+---
+
+**Q3.** The Bretton Woods institutions were created in 1944.
+- **A.** True
+- **B.** False
+**✅ Correct Answer: A**
+**📝 Explanation:** The conference took place at Bretton Woods, New Hampshire in July 1944.`;
+
+    const txt = document.getElementById('arena-upload-text');
+    if (txt) {
+      txt.value = sample;
+      txt.focus();
+    }
+  },
+
+  async handleUploadArenaQuestions() {
+    const txtArea = document.getElementById('arena-upload-text');
+    const feedback = document.getElementById('arena-upload-feedback');
+    const btn = document.getElementById('btn-arena-upload');
+
+    if (!txtArea || !txtArea.value.trim()) {
+      if (feedback) {
+        feedback.innerHTML = `
+          <div style="background:#fef2f2; border:1px solid #f87171; color:#991b1b; padding:10px 14px; border-radius:8px; font-size:0.88rem;">
+            ⚠️ Please paste or type your questions first into the box above.
+          </div>
+        `;
+      }
+      return;
+    }
+
+    const rawText = txtArea.value.trim();
+
+    try {
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Parsing & Attaching Questions...';
+      }
+      if (feedback) {
+        feedback.innerHTML = `
+          <div style="background:#eff6ff; border:1px solid #93c5fd; color:#1e40af; padding:10px 14px; border-radius:8px; font-size:0.88rem;">
+            ⏳ Parsing questions and saving to database...
+          </div>
+        `;
+      }
+
+      const res = await API.adminArenaUploadQuestions(null, rawText);
+
+      if (feedback) {
+        feedback.innerHTML = `
+          <div style="background:#ecfdf5; border:1px solid #34d399; color:#065f46; padding:12px 16px; border-radius:8px; font-size:0.9rem;">
+            <strong>✅ Success!</strong> ${res.message || 'Questions successfully attached to Sunday Arena.'}
+          </div>
+        `;
+      }
+
+      // Refresh monitor and question list
+      await this.loadAdminArenaTab();
+      await this.loadAdminArenaQuestionsPreview();
+    } catch (err) {
+      console.error('Arena question upload failed:', err);
+      if (feedback) {
+        feedback.innerHTML = `
+          <div style="background:#fef2f2; border:1px solid #f87171; color:#991b1b; padding:12px 16px; border-radius:8px; font-size:0.88rem;">
+            <strong>❌ Error parsing questions:</strong> ${this.escapeHtml(err.message)}
+          </div>
+        `;
+      }
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '📥 Parse & Attach Questions to Sunday Arena';
+      }
+    }
+  },
+
+  async loadAdminArenaQuestionsPreview() {
+    const listContainer = document.getElementById('admin-arena-questions-list');
+    const countBadge = document.getElementById('admin-arena-q-count');
+    if (!listContainer) return;
+
+    try {
+      listContainer.innerHTML = '<p style="font-size:0.85rem; color:var(--text-muted); text-align:center; padding:16px;">⏳ Fetching arena questions...</p>';
+
+      const data = await API.adminArenaGetQuestions();
+      const questions = data.questions || [];
+
+      if (countBadge) {
+        countBadge.textContent = questions.length;
+      }
+
+      if (questions.length === 0) {
+        listContainer.innerHTML = `
+          <div style="text-align:center; padding:20px; color:var(--text-muted); font-size:0.85rem;">
+            No questions are currently queued for this Arena. Paste questions in the box above or schedule a new competition.
+          </div>
+        `;
+        return;
+      }
+
+      listContainer.innerHTML = questions.map((q, idx) => {
+        return `
+          <div style="background:#fff; border:1px solid var(--border); border-radius:8px; padding:12px 14px; margin-bottom:10px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px; gap:8px;">
+              <div style="font-weight:700; color:var(--navy); font-size:0.92rem;">
+                <span style="color:var(--blue); margin-right:6px;">Q${idx + 1}.</span> ${this.escapeHtml(q.question_text)}
+              </div>
+              <span style="font-size:0.75rem; background:#eff6ff; color:#2563eb; padding:2px 8px; border-radius:4px; font-weight:700; white-space:nowrap;">
+                ${this.escapeHtml(q.difficulty || 'Medium')}
+              </span>
+            </div>
+
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:6px; font-size:0.83rem; margin:8px 0;">
+              <div style="padding:4px 8px; border-radius:4px; ${q.correct_answer === 'A' ? 'background:#ecfdf5; border:1px solid #10b981; font-weight:700; color:#065f46;' : 'background:var(--bg-main); color:var(--text-muted);'}">
+                <strong>A.</strong> ${this.escapeHtml(q.option_a || '—')}
+              </div>
+              <div style="padding:4px 8px; border-radius:4px; ${q.correct_answer === 'B' ? 'background:#ecfdf5; border:1px solid #10b981; font-weight:700; color:#065f46;' : 'background:var(--bg-main); color:var(--text-muted);'}">
+                <strong>B.</strong> ${this.escapeHtml(q.option_b || '—')}
+              </div>
+              ${q.option_c ? `
+                <div style="padding:4px 8px; border-radius:4px; ${q.correct_answer === 'C' ? 'background:#ecfdf5; border:1px solid #10b981; font-weight:700; color:#065f46;' : 'background:var(--bg-main); color:var(--text-muted);'}">
+                  <strong>C.</strong> ${this.escapeHtml(q.option_c)}
+                </div>
+              ` : ''}
+              ${q.option_d ? `
+                <div style="padding:4px 8px; border-radius:4px; ${q.correct_answer === 'D' ? 'background:#ecfdf5; border:1px solid #10b981; font-weight:700; color:#065f46;' : 'background:var(--bg-main); color:var(--text-muted);'}">
+                  <strong>D.</strong> ${this.escapeHtml(q.option_d)}
+                </div>
+              ` : ''}
+            </div>
+
+            <div style="font-size:0.8rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; border-top:1px dashed var(--border); padding-top:6px; margin-top:6px;">
+              <span style="color:#065f46; font-weight:700;">
+                ✅ Correct Key: <strong>${this.escapeHtml(q.correct_answer)}</strong>
+              </span>
+              ${q.explanation ? `
+                <span style="color:var(--text-muted); font-style:italic;">
+                  📝 ${this.escapeHtml(q.explanation.length > 90 ? q.explanation.substring(0, 90) + '...' : q.explanation)}
+                </span>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    } catch (err) {
+      console.warn('Failed to load arena questions preview:', err.message);
+      if (listContainer) {
+        listContainer.innerHTML = `<p style="color:#ef4444; font-size:0.85rem; padding:12px;">Failed to load question preview: ${this.escapeHtml(err.message)}</p>`;
+      }
     }
   },
 

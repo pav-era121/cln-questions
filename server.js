@@ -1013,6 +1013,35 @@ app.get('/api/admin/arena/monitor', authenticateToken, requireAdmin, (req, res) 
   }
 });
 
+// Admin Upload & Attach Questions to Sunday Arena
+app.post('/api/admin/arena/upload-questions', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { sessionId, rawText } = req.body;
+    if (!rawText || !rawText.trim()) {
+      return res.status(400).json({ error: 'Please paste question text to upload.' });
+    }
+    const result = await arenaEngine.parseAndAttachArenaQuestions(sessionId, rawText);
+    res.json({
+      message: `Successfully parsed and attached ${result.questionCount} questions to the Sunday Arena!`,
+      result
+    });
+  } catch (err) {
+    console.error('Error attaching arena questions:', err);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Admin Get Loaded Questions for Sunday Arena Preview
+app.get('/api/admin/arena/questions', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const sessionId = req.query.sessionId;
+    const questions = await arenaEngine.getArenaQuestions(sessionId);
+    res.json({ questions });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Global Error Handling Middleware (Ensures JSON errors, prevents HTML error responses)
 app.use((err, req, res, next) => {
   console.error('API Error:', err);

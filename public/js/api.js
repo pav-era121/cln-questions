@@ -275,5 +275,17 @@ const API = {
 
   async adminArenaMonitor() {
     return await this.request('/admin/arena/monitor');
+  },
+
+  async adminArenaUploadQuestions(sessionId, rawText) {
+    return await this.request('/admin/arena/upload-questions', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId, rawText })
+    });
+  },
+
+  async adminArenaGetQuestions(sessionId) {
+    const query = sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : '';
+    return await this.request(`/admin/arena/questions${query}`);
   }
 };

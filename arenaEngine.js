@@ -560,6 +560,231 @@ class ArenaEngine {
     await this.loadActiveSession();
     return { sessionId, title, questionCount: qIds.length };
   }
+
+  parseQuestionsText(rawText) {
+    if (!rawText || typeof rawText !== 'string') return [];
+    const normalized = rawText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const lines = normalized.split('\n');
+    const blocks = [];
+    let currentBlock = [];
+
+    for (let line of lines) {
+      const trimmed = line.trim();
+      const isNewQ = /^(\*{0,2}Q\s*\d+[\.\:\)]\*{0,2}|\d+[\.\)])\s+/i.test(trimmed);
+      if (isNewQ && currentBlock.length > 0) {
+        blocks.push(currentBlock.join('\n'));
+        currentBlock = [line];
+      } else {
+        currentBlock.push(line);
+      }
+    }
+    if (currentBlock.length > 0) {
+      blocks.push(currentBlock.join('\n'));
+    }
+
+    const parsedQuestions = [];
+
+    for (let block of blocks) {
+      const trimmedBlock = block.trim();
+      if (!trimmedBlock) continue;
+
+      const optAMatch = trimmedBlock.match(/(?:^|\n)\s*(?:[-*•]\s*)?(?:\*{0,2}A\.?\*{0,2}|\(A\)|A[\.\)])\s+/i);
+      if (!optAMatch) continue;
+
+      let stem = trimmedBlock.substring(0, optAMatch.index).trim();
+      stem = stem.replace(/^(\*{0,2}Q\s*\d+[\.\:\)]\*{0,2}|\d+[\.\)])\s*/i, '').trim();
+      stem = stem.replace(/^---\s*/, '').trim();
+
+      let difficulty = 'Medium';
+      const diffMatch = stem.match(/^\[(Easy|Medium|Hard)\]\s*/i);
+      if (diffMatch) {
+        difficulty = diffMatch[1].charAt(0).toUpperCase() + diffMatch[1].slice(1).toLowerCase();
+        stem = stem.replace(/^\[(Easy|Medium|Hard)\]\s*/i, '').trim();
+      }
+
+      const rest = trimmedBlock.substring(optAMatch.index);
+
+      let correctAnswer = '';
+      const ansMatch = rest.match(/(?:Correct Answer|✅ Correct Answer|Answer|Ans|Key)\s*[:：\-]\s*\*{0,2}([A-D])/i);
+      if (ansMatch) {
+        correctAnswer = ansMatch[1].toUpperCase();
+      }
+
+      let explanation = '';
+      const expMatch = rest.match(/(?:Explanation|📝 Explanation|Explain)\s*[:：\-]\s*([\s\S]*)$/i);
+      if (expMatch) {
+        explanation = expMatch[1].trim();
+        explanation = explanation.replace(/^\*{1,2}\s*/, '').replace(/\*{1,2}$/, '').replace(/\n\s*---\s*$/, '').trim();
+      }
+
+      let optionsPart = rest;
+      if (ansMatch) {
+        optionsPart = optionsPart.substring(0, ansMatch.index);
+      } else if (expMatch) {
+        optionsPart = optionsPart.substring(0, expMatch.index);
+      }
+
+      const optRegex = /(?:^|\n)\s*(?:[-*•]\s*)?(?:\*{0,2}([A-D])\.?\*{0,2}|\(([A-D])\)|([A-D])[\.\)])\s+/gi;
+      const matches = [];
+      let m;
+      while ((m = optRegex.exec(optionsPart)) !== null) {
+        const letter = (m[1] || m[2] || m[3]).toUpperCase();
+        matches.push({ letter, index: m.index, matchLength: m[0].length });
+      }
+
+      const options = { A: '', B: '', C: '', D: '' };
+      for (let i = 0; i < matches.length; i++) {
+        const cur = matches[i];
+        const start = cur.index + cur.matchLength;
+        const end = (i + 1 < matches.length) ? matches[i + 1].index : optionsPart.length;
+        let optText = optionsPart.substring(start, end).trim();
+        optText = optText.replace(/\*{2,}$/, '').replace(/^[-*•]\s*/, '').trim();
+        options[cur.letter] = optText;
+      }
+
+      if (stem && (options.A || options.B)) {
+        parsedQuestions.push({
+          question_text: stem,
+          option_a: options.A || '',
+          option_b: options.B || '',
+          option_c: options.C || '',
+          option_d: options.D || '',
+          correct_answer: correctAnswer || 'A',
+          explanation: explanation || '',
+          difficulty
+        });
+      }
+    }
+
+    return parsedQuestions;
+  }
+
+  async parseAndAttachArenaQuestions(sessionId, rawText) {
+    const parsedQuestions = this.parseQuestionsText(rawText);
+    if (!parsedQuestions || parsedQuestions.length === 0) {
+      throw new Error('No valid questions could be parsed from the provided text. Please ensure questions follow the standard Q / Option format.');
+    }
+
+    let targetSession = null;
+    if (sessionId) {
+      targetSession = await this.db.prepare('SELECT * FROM arena_sessions WHERE id = ?').get(sessionId);
+    }
+    if (!targetSession && this.activeSession) {
+      targetSession = this.activeSession;
+    }
+    if (!targetSession) {
+      targetSession = await this.db.prepare(`
+        SELECT * FROM arena_sessions 
+        WHERE status IN ('SCHEDULED', 'LOBBY') 
+        ORDER BY created_at DESC LIMIT 1
+      `).get();
+    }
+    if (!targetSession) {
+      await this.ensureUpcomingSundaySession();
+      targetSession = this.activeSession;
+    }
+    if (!targetSession) {
+      throw new Error('No active or scheduled Arena session found to attach questions to.');
+    }
+
+    // Ensure foreign key parent rows exist in courses, chapters, quizzes
+    try {
+      await this.db.prepare(`
+        INSERT OR IGNORE INTO courses (id, name, description, image_url, status) 
+        VALUES ('c_arena', 'Sunday Live Grand Arena', 'Weekly synchronized freshman championship arena', '', 'ACTIVE')
+      `).run();
+      await this.db.prepare(`
+        INSERT OR IGNORE INTO chapters (id, course_id, name, description, chapter_order, status) 
+        VALUES ('ch_arena', 'c_arena', 'Arena Competitions', 'Arena Question Sets', 1, 'ACTIVE')
+      `).run();
+
+      const quizId = `quiz_arena_${targetSession.id}`;
+      await this.db.prepare(`
+        INSERT OR IGNORE INTO quizzes (id, chapter_id, title, description, question_count, time_limit, difficulty, status)
+        VALUES (?, 'ch_arena', ?, 'Sunday Grand Arena Question Batch', ?, ?, 'Medium', 'ACTIVE')
+      `).run(quizId, targetSession.title || 'Sunday Arena', parsedQuestions.length, targetSession.seconds_per_question || 40);
+    } catch (e) {
+      console.warn('Foreign key setup note:', e.message);
+    }
+
+    const quizId = `quiz_arena_${targetSession.id}`;
+    const newQuestionIds = [];
+    const timestamp = Date.now();
+
+    for (let i = 0; i < parsedQuestions.length; i++) {
+      const q = parsedQuestions[i];
+      const qId = `q_arena_${timestamp}_${i + 1}`;
+      newQuestionIds.push(qId);
+
+      await this.db.prepare(`
+        INSERT INTO questions (
+          id, quiz_id, question_text, image_url,
+          option_a, option_b, option_c, option_d,
+          correct_answer, explanation, difficulty
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        qId,
+        quizId,
+        q.question_text,
+        null,
+        q.option_a,
+        q.option_b,
+        q.option_c || '',
+        q.option_d || '',
+        q.correct_answer || 'A',
+        q.explanation || '',
+        q.difficulty || 'Medium'
+      );
+    }
+
+    await this.db.prepare(`
+      UPDATE arena_sessions 
+      SET question_ids = ?, current_question_index = 0, current_question_started_at = 0
+      WHERE id = ?
+    `).run(JSON.stringify(newQuestionIds), targetSession.id);
+
+    await this.loadActiveSession();
+
+    return {
+      sessionId: targetSession.id,
+      title: targetSession.title,
+      questionCount: newQuestionIds.length,
+      questions: parsedQuestions
+    };
+  }
+
+  async getArenaQuestions(sessionId) {
+    let targetSession = null;
+    if (sessionId) {
+      targetSession = await this.db.prepare('SELECT * FROM arena_sessions WHERE id = ?').get(sessionId);
+    } else if (this.activeSession) {
+      targetSession = this.activeSession;
+    } else {
+      targetSession = await this.db.prepare(`
+        SELECT * FROM arena_sessions ORDER BY created_at DESC LIMIT 1
+      `).get();
+    }
+
+    if (!targetSession) return [];
+
+    let qIds = [];
+    try {
+      qIds = JSON.parse(targetSession.question_ids || '[]');
+    } catch (e) {
+      qIds = [];
+    }
+
+    if (qIds.length === 0) return [];
+
+    const placeholders = qIds.map(() => '?').join(',');
+    const rows = await this.db.prepare(`
+      SELECT id, question_text, image_url, option_a, option_b, option_c, option_d, correct_answer, explanation, difficulty 
+      FROM questions WHERE id IN (${placeholders})
+    `).all(qIds);
+
+    const rowMap = new Map(rows.map(r => [r.id, r]));
+    return qIds.map(id => rowMap.get(id)).filter(Boolean);
+  }
 }
 
 const arenaEngine = new ArenaEngine();

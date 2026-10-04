@@ -832,6 +832,58 @@
             </form>
           </div>
 
+          <!-- UPLOAD QUESTIONS FOR UPCOMING SUNDAY ARENA -->
+          <div style="background:var(--bg-main); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:24px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px; flex-wrap:wrap; gap:10px;">
+              <div>
+                <h4 style="font-size:1.05rem; font-weight:700; color:var(--navy); margin:0 0 4px; display:flex; align-items:center; gap:8px;">
+                  <span>📥</span> Upload / Paste Questions for Sunday Arena
+                </h4>
+                <p style="font-size:0.85rem; color:var(--text-muted); margin:0;">
+                  Paste your prepared competition questions below. The system automatically parses question stems, options A–D (or True/False), correct answers, and explanations.
+                </p>
+              </div>
+              <div style="display:flex; gap:8px;">
+                <button type="button" class="btn btn-sm btn-outline" onclick="app.insertArenaSampleQuestions()">📋 Insert Sample Format</button>
+                <button type="button" class="btn btn-sm btn-outline" onclick="document.getElementById('arena-upload-text').value=''; document.getElementById('arena-upload-feedback').innerHTML='';">Clear</button>
+              </div>
+            </div>
+
+            <textarea id="arena-upload-text" class="form-input" style="width:100%; height:190px; font-family:monospace; font-size:0.85rem; padding:12px; line-height:1.5; background:#fff;" placeholder="**Q1.** Mercantilism's contemporary relevance is demonstrated by:&#10;&#10;- **A.** The universal adoption of free trade without exception&#10;- **B.** The global abolition of state intervention in economies&#10;- **C.** The East Asian economies developmental state approach&#10;- **D.** The disappearance of trade blocs&#10;&#10;**✅ Correct Answer: C**&#10;**📝 Explanation:** East Asian states fulfilled mercantilist roles almost perfectly.&#10;&#10;---&#10;&#10;**Q2.** The Bretton Woods system was established in 1944.&#10;- **A.** True&#10;- **B.** False&#10;**✅ Correct Answer: A**"></textarea>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; flex-wrap:wrap; gap:10px;">
+              <button type="button" class="btn btn-primary" id="btn-arena-upload" onclick="app.handleUploadArenaQuestions()" style="font-weight:700; padding:10px 20px;">
+                📥 Parse & Attach Questions to Sunday Arena
+              </button>
+              <div style="font-size:0.82rem; color:var(--text-muted);">
+                💡 Tip: Markdown bold (`**Q1.**`, `- **A.**`, `**✅ Correct Answer: B**`) and plain text (`1.`, `A.`, `Answer: B`) are both supported!
+              </div>
+            </div>
+
+            <div id="arena-upload-feedback" style="margin-top:12px;"></div>
+          </div>
+
+          <!-- CURRENT QUEUED QUESTIONS PREVIEW -->
+          <div style="background:#fff; border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:24px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
+              <div>
+                <h4 style="font-size:1.05rem; font-weight:700; color:var(--navy); margin:0 0 4px; display:flex; align-items:center; gap:8px;">
+                  <span>📋</span> Arena Questions Queue (<span id="admin-arena-q-count">...</span> Questions Loaded)
+                </h4>
+                <p style="font-size:0.85rem; color:var(--text-muted); margin:0;">
+                  These are the questions that will be broadcast synchronously to all students during this competition.
+                </p>
+              </div>
+              <div>
+                <button type="button" class="btn btn-sm btn-outline" onclick="app.loadAdminArenaQuestionsPreview()">🔄 Refresh Question List</button>
+              </div>
+            </div>
+
+            <div id="admin-arena-questions-list" style="max-height:360px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; padding:12px; background:var(--bg-main);">
+              <p style="font-size:0.85rem; color:var(--text-muted); text-align:center; padding:16px;">Loading questions preview...</p>
+            </div>
+          </div>
+
           <!-- LIVE STATUS & QUICK SUPERVISOR IN ADMIN TAB -->
           <div id="admin-arena-live-monitor" style="border:1px solid var(--border); border-radius:12px; padding:20px;">
             <!-- Dynamically populated -->
