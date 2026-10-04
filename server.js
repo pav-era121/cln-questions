@@ -298,8 +298,8 @@ app.get('/api/courses', async (req, res) => {
     const courses = await db.prepare(`
       SELECT c.*, COUNT(ch.id) AS chapter_count
       FROM courses c
-      LEFT JOIN chapters ch ON c.id = ch.course_id AND ch.status = 'ACTIVE'
-      WHERE c.status = 'ACTIVE'
+      LEFT JOIN chapters ch ON c.id = ch.course_id AND ch.status = 'ACTIVE' AND ch.id != 'ch_arena'
+      WHERE c.status = 'ACTIVE' AND c.id != 'c_arena' AND c.id NOT LIKE 'c_arena%'
       GROUP BY c.id
       ORDER BY c.created_at ASC
     `).all();
@@ -312,14 +312,18 @@ app.get('/api/courses', async (req, res) => {
 
 app.get('/api/courses/:id', async (req, res) => {
   try {
+    if (req.params.id === 'c_arena' || req.params.id.startsWith('c_arena')) {
+      return res.status(404).json({ error: 'Course not found.' });
+    }
+
     const course = await db.prepare("SELECT * FROM courses WHERE id = ? AND status = 'ACTIVE'").get(req.params.id);
     if (!course) return res.status(404).json({ error: 'Course not found.' });
 
     const chapters = await db.prepare(`
       SELECT ch.*, COUNT(q.id) AS quiz_count
       FROM chapters ch
-      LEFT JOIN quizzes q ON ch.id = q.chapter_id AND q.status = 'ACTIVE'
-      WHERE ch.course_id = ? AND ch.status = 'ACTIVE'
+      LEFT JOIN quizzes q ON ch.id = q.chapter_id AND q.status = 'ACTIVE' AND q.id NOT LIKE 'quiz_arena_%'
+      WHERE ch.course_id = ? AND ch.status = 'ACTIVE' AND ch.id != 'ch_arena'
       GROUP BY ch.id
       ORDER BY ch.chapter_order ASC
     `).all(req.params.id);
@@ -332,10 +336,14 @@ app.get('/api/courses/:id', async (req, res) => {
 
 app.get('/api/chapters/:id', async (req, res) => {
   try {
+    if (req.params.id === 'ch_arena' || req.params.id.startsWith('ch_arena')) {
+      return res.status(404).json({ error: 'Chapter not found.' });
+    }
+
     const chapter = await db.prepare("SELECT * FROM chapters WHERE id = ? AND status = 'ACTIVE'").get(req.params.id);
     if (!chapter) return res.status(404).json({ error: 'Chapter not found.' });
 
-    const quizzes = await db.prepare("SELECT * FROM quizzes WHERE chapter_id = ? AND status = 'ACTIVE' ORDER BY created_at ASC").all(req.params.id);
+    const quizzes = await db.prepare("SELECT * FROM quizzes WHERE chapter_id = ? AND status = 'ACTIVE' AND id NOT LIKE 'quiz_arena_%' ORDER BY created_at ASC").all(req.params.id);
 
     res.json({ chapter, quizzes });
   } catch (err) {
@@ -346,6 +354,9 @@ app.get('/api/chapters/:id', async (req, res) => {
 // Start Quiz (Protected & Authoritative - Hides Correct Answers!)
 app.get('/api/quizzes/:id/start', authenticateToken, verifyActiveUser, async (req, res) => {
   try {
+    if (req.params.id.startsWith('quiz_arena_')) {
+      return res.status(403).json({ error: 'Sunday Arena questions can only be accessed during live Sunday competitions.' });
+    }
     const quiz = await db.prepare("SELECT * FROM quizzes WHERE id = ? AND status = 'ACTIVE'").get(req.params.id);
     if (!quiz) return res.status(404).json({ error: 'Quiz not found or inactive.' });
 
@@ -778,13 +789,13 @@ app.delete('/api/admin/chapters/:id', authenticateToken, requireAdmin, async (re
   }
 });
 
-// Admin Content Hierarchy Tree
+// Admin Content Hierarchy Tree (Excludes internal arena items)
 app.get('/api/admin/content-tree', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const courses = await db.prepare("SELECT * FROM courses ORDER BY created_at ASC").all();
-    const chapters = await db.prepare("SELECT * FROM chapters ORDER BY chapter_order ASC, created_at ASC").all();
-    const quizzes = await db.prepare("SELECT * FROM quizzes ORDER BY created_at ASC").all();
-    const questions = await db.prepare("SELECT id, quiz_id, question_text, image_url, option_a, option_b, option_c, option_d, correct_answer, explanation, difficulty FROM questions").all();
+    const courses = await db.prepare("SELECT * FROM courses WHERE id != 'c_arena' AND id NOT LIKE 'c_arena%' ORDER BY created_at ASC").all();
+    const chapters = await db.prepare("SELECT * FROM chapters WHERE id != 'ch_arena' AND course_id != 'c_arena' ORDER BY chapter_order ASC, created_at ASC").all();
+    const quizzes = await db.prepare("SELECT * FROM quizzes WHERE id NOT LIKE 'quiz_arena_%' AND chapter_id != 'ch_arena' ORDER BY created_at ASC").all();
+    const questions = await db.prepare("SELECT id, quiz_id, question_text, image_url, option_a, option_b, option_c, option_d, correct_answer, explanation, difficulty FROM questions WHERE quiz_id NOT LIKE 'quiz_arena_%'").all();
 
     res.json({ courses, chapters, quizzes, questions });
   } catch (err) {

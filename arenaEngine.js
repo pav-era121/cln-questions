@@ -40,6 +40,22 @@ class ArenaEngine {
           answers TEXT DEFAULT '{}',
           PRIMARY KEY (session_id, user_id)
         );
+
+        CREATE TABLE IF NOT EXISTS arena_questions (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          question_order INTEGER DEFAULT 1,
+          question_text TEXT NOT NULL,
+          image_url TEXT,
+          option_a TEXT NOT NULL,
+          option_b TEXT NOT NULL,
+          option_c TEXT DEFAULT '',
+          option_d TEXT DEFAULT '',
+          correct_answer TEXT NOT NULL,
+          explanation TEXT DEFAULT '',
+          difficulty TEXT DEFAULT 'Medium',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
       `);
 
       // 2. Load latest active, lobby, or scheduled session
@@ -135,20 +151,32 @@ class ArenaEngine {
       }
 
       this.activeSession = session;
-      const qIds = JSON.parse(session.question_ids || '[]');
 
-      if (qIds.length > 0) {
-        // Fetch question details in exact order
-        const placeholders = qIds.map(() => '?').join(',');
-        const rows = await this.db.prepare(`
-          SELECT id, question_text, image_url, option_a, option_b, option_c, option_d, correct_answer, explanation, difficulty 
-          FROM questions WHERE id IN (${placeholders})
-        `).all(qIds);
+      // 1. Check if dedicated arena_questions exist for this session
+      const arenaQRows = await this.db.prepare(`
+        SELECT id, question_text, image_url, option_a, option_b, option_c, option_d, correct_answer, explanation, difficulty
+        FROM arena_questions
+        WHERE session_id = ?
+        ORDER BY question_order ASC
+      `).all(session.id);
 
-        const rowMap = new Map(rows.map(r => [r.id, r]));
-        this.questions = qIds.map(id => rowMap.get(id)).filter(Boolean);
+      if (arenaQRows && arenaQRows.length > 0) {
+        this.questions = arenaQRows;
       } else {
-        this.questions = [];
+        const qIds = JSON.parse(session.question_ids || '[]');
+        if (qIds.length > 0) {
+          // Fetch question details in exact order
+          const placeholders = qIds.map(() => '?').join(',');
+          const rows = await this.db.prepare(`
+            SELECT id, question_text, image_url, option_a, option_b, option_c, option_d, correct_answer, explanation, difficulty 
+            FROM questions WHERE id IN (${placeholders})
+          `).all(qIds);
+
+          const rowMap = new Map(rows.map(r => [r.id, r]));
+          this.questions = qIds.map(id => rowMap.get(id)).filter(Boolean);
+        } else {
+          this.questions = [];
+        }
       }
 
       // Load participants from DB
@@ -687,44 +715,27 @@ class ArenaEngine {
       throw new Error('No active or scheduled Arena session found to attach questions to.');
     }
 
-    // Ensure foreign key parent rows exist in courses, chapters, quizzes
-    try {
-      await this.db.prepare(`
-        INSERT OR IGNORE INTO courses (id, name, description, image_url, status) 
-        VALUES ('c_arena', 'Sunday Live Grand Arena', 'Weekly synchronized freshman championship arena', '', 'ACTIVE')
-      `).run();
-      await this.db.prepare(`
-        INSERT OR IGNORE INTO chapters (id, course_id, name, description, chapter_order, status) 
-        VALUES ('ch_arena', 'c_arena', 'Arena Competitions', 'Arena Question Sets', 1, 'ACTIVE')
-      `).run();
+    // Dedicated isolated storage in arena_questions (never touches regular courses or quizzes!)
+    await this.db.prepare('DELETE FROM arena_questions WHERE session_id = ?').run(targetSession.id);
 
-      const quizId = `quiz_arena_${targetSession.id}`;
-      await this.db.prepare(`
-        INSERT OR IGNORE INTO quizzes (id, chapter_id, title, description, question_count, time_limit, difficulty, status)
-        VALUES (?, 'ch_arena', ?, 'Sunday Grand Arena Question Batch', ?, ?, 'Medium', 'ACTIVE')
-      `).run(quizId, targetSession.title || 'Sunday Arena', parsedQuestions.length, targetSession.seconds_per_question || 40);
-    } catch (e) {
-      console.warn('Foreign key setup note:', e.message);
-    }
-
-    const quizId = `quiz_arena_${targetSession.id}`;
     const newQuestionIds = [];
     const timestamp = Date.now();
 
     for (let i = 0; i < parsedQuestions.length; i++) {
       const q = parsedQuestions[i];
-      const qId = `q_arena_${timestamp}_${i + 1}`;
+      const qId = `aq_${timestamp}_${i + 1}`;
       newQuestionIds.push(qId);
 
       await this.db.prepare(`
-        INSERT INTO questions (
-          id, quiz_id, question_text, image_url,
+        INSERT INTO arena_questions (
+          id, session_id, question_order, question_text, image_url,
           option_a, option_b, option_c, option_d,
           correct_answer, explanation, difficulty
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         qId,
-        quizId,
+        targetSession.id,
+        i + 1,
         q.question_text,
         null,
         q.option_a,
@@ -767,6 +778,19 @@ class ArenaEngine {
 
     if (!targetSession) return [];
 
+    // 1. Check dedicated arena_questions table first
+    const arenaQRows = await this.db.prepare(`
+      SELECT id, question_text, image_url, option_a, option_b, option_c, option_d, correct_answer, explanation, difficulty
+      FROM arena_questions
+      WHERE session_id = ?
+      ORDER BY question_order ASC
+    `).all(targetSession.id);
+
+    if (arenaQRows && arenaQRows.length > 0) {
+      return arenaQRows;
+    }
+
+    // 2. Fallback to pool questions if session was populated from existing questions
     let qIds = [];
     try {
       qIds = JSON.parse(targetSession.question_ids || '[]');

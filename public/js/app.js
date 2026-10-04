@@ -191,7 +191,8 @@ const app = {
   async loadCourses() {
     try {
       const data = await API.getCourses();
-      this.state.courses = data.courses || [];
+      const raw = data.courses || [];
+      this.state.courses = raw.filter(c => c.id !== 'c_arena' && !c.id.startsWith('c_arena'));
     } catch (err) {
       console.error('Failed to fetch courses:', err);
     }
