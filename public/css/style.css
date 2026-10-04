@@ -1401,4 +1401,136 @@ body {
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.08);
 }
 
+/* ==========================================================================
+   SUNDAY ARENA FLOATING SIDEBAR TAB & SLIDE-OUT DRAWER
+   ========================================================================== */
+
+.arena-sidebar-trigger {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 990;
+  background: linear-gradient(135deg, #0f2447 0%, #1e4585 100%);
+  color: #FFFFFF;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-right: none;
+  border-radius: 14px 0 0 14px;
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  box-shadow: -4px 6px 20px rgba(15, 36, 71, 0.35);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+
+.arena-sidebar-trigger:hover {
+  background: linear-gradient(135deg, #163261 0%, #2554a3 100%);
+  padding-left: 14px;
+  box-shadow: -6px 8px 26px rgba(15, 36, 71, 0.45);
+}
+
+.arena-sidebar-trigger .tab-icon {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.arena-sidebar-trigger .tab-title {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+}
+
+.arena-sidebar-trigger .tab-badge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: #ffd166;
+  color: #0f2447;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.arena-drawer-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(15, 36, 71, 0.5);
+  backdrop-filter: blur(4px);
+  z-index: 1001;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.arena-drawer-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.arena-drawer {
+  position: fixed;
+  top: 0;
+  right: -440px;
+  width: 400px;
+  max-width: 92vw;
+  height: 100vh;
+  background: #FFFFFF;
+  z-index: 1002;
+  box-shadow: -10px 0 35px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  transition: right 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.arena-drawer.active {
+  right: 0;
+}
+
+.arena-drawer-header {
+  background: linear-gradient(135deg, #0f2447 0%, #1e4585 100%);
+  color: #FFFFFF;
+  padding: 20px 22px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 3px solid #ffd166;
+}
+
+.arena-drawer-close {
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  color: #FFFFFF;
+  font-size: 1.25rem;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.arena-drawer-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.arena-drawer-body {
+  padding: 22px;
+  overflow-y: auto;
+  flex: 1;
+  background: #f8fafc;
+}
+
 

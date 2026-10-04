@@ -79,33 +79,259 @@ const arena = {
 
   async init() {
     this.updateNavBadge();
+
+    // Listen for Escape key to dismiss sidebar drawer
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        this.toggleSidebar(false);
+      }
+    });
+  },
+
+  toggleSidebar(forceState) {
+    const drawer = document.getElementById('arena-sidebar-drawer');
+    const overlay = document.getElementById('arena-sidebar-overlay');
+    if (!drawer || !overlay) return;
+
+    const isOpen = drawer.classList.contains('active');
+    const targetState = typeof forceState === 'boolean' ? forceState : !isOpen;
+
+    if (targetState) {
+      drawer.classList.add('active');
+      overlay.classList.add('active');
+      this.renderSidebarDrawerContent();
+    } else {
+      drawer.classList.remove('active');
+      overlay.classList.remove('active');
+      if (this.state.sidebarTimer) {
+        clearInterval(this.state.sidebarTimer);
+        this.state.sidebarTimer = null;
+      }
+    }
+  },
+
+  async renderSidebarDrawerContent() {
+    const container = document.getElementById('arena-drawer-body-content');
+    const headerBadge = document.getElementById('arena-drawer-status-badge');
+    if (!container) return;
+
+    try {
+      container.innerHTML = `
+        <div style="text-align:center; padding:32px 0;">
+          <div style="font-size:1.8rem; margin-bottom:8px;">⏳</div>
+          <p style="color:var(--text-muted); font-size:0.9rem;">Checking Sunday Arena status...</p>
+        </div>
+      `;
+
+      const data = await API.getArenaCurrent();
+      this.state.data = data;
+
+      if (headerBadge) {
+        if (!data || !data.hasSession) {
+          headerBadge.innerText = 'OFFLINE';
+          headerBadge.style.background = '#e2e8f0';
+          headerBadge.style.color = '#475569';
+        } else {
+          headerBadge.innerText = data.status;
+          if (data.status === 'ACTIVE') {
+            headerBadge.innerText = '🔴 LIVE NOW';
+            headerBadge.style.background = '#e63946';
+            headerBadge.style.color = '#fff';
+          } else if (data.status === 'LOBBY') {
+            headerBadge.innerText = '🟢 LOBBY OPEN';
+            headerBadge.style.background = '#10b981';
+            headerBadge.style.color = '#fff';
+          } else if (data.status === 'ENDED') {
+            headerBadge.innerText = '🏁 FINISHED';
+            headerBadge.style.background = '#2563eb';
+            headerBadge.style.color = '#fff';
+          } else {
+            headerBadge.innerText = '⏳ SCHEDULED';
+            headerBadge.style.background = '#ffd166';
+            headerBadge.style.color = '#0f2447';
+          }
+        }
+      }
+
+      if (!data || !data.hasSession) {
+        container.innerHTML = `
+          <div style="text-align:center; padding:24px 0;">
+            <p style="color:var(--text-muted);">No Arena session scheduled yet.</p>
+            ${app.state.user && app.state.user.role === 'ADMIN' ? `
+              <button class="btn btn-primary" onclick="arena.toggleSidebar(false); app.showView('admin'); app.showAdminTab('arena');" style="width:100%; margin-top:12px;">
+                ⚙️ Open Admin Arena Manager
+              </button>
+            ` : ''}
+          </div>
+        `;
+        return;
+      }
+
+      const scheduledDate = new Date(data.scheduledAt);
+      const isAdmin = app.state.user && app.state.user.role === 'ADMIN';
+
+      container.innerHTML = `
+        <!-- CONTEST CARD -->
+        <div style="background:#fff; border:1px solid var(--border); border-radius:14px; padding:18px; margin-bottom:18px; box-shadow:0 2px 10px rgba(0,0,0,0.04);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <span style="font-size:0.75rem; font-weight:800; text-transform:uppercase; letter-spacing:0.05em; color:var(--blue);">Freshman Championship</span>
+            <span style="font-size:0.75rem; font-weight:700; color:var(--text-muted);">⏱️ 40s/Question</span>
+          </div>
+          <h4 style="font-size:1.12rem; font-weight:800; color:var(--navy); margin:0 0 6px; line-height:1.3;">${data.title}</h4>
+          <p style="font-size:0.84rem; color:var(--text-muted); margin:0 0 12px; line-height:1.4;">
+            Synchronized live competition. All freshmen see the exact same question simultaneously.
+          </p>
+
+          <!-- COUNTDOWN DIGITS -->
+          <div id="drawer-countdown-box" style="background:var(--navy); color:#fff; border-radius:10px; padding:14px; text-align:center; margin-bottom:14px;">
+            <div style="font-size:0.72rem; text-transform:uppercase; letter-spacing:1px; color:#ffd166; font-weight:800; margin-bottom:6px;">Next Grand Arena</div>
+            <div id="drawer-countdown-digits" style="font-size:1.35rem; font-weight:900; letter-spacing:1px; font-family:monospace; color:#fff;">
+              -- : -- : -- : --
+            </div>
+            <div style="font-size:0.75rem; opacity:0.8; margin-top:4px;">
+              Every Sunday @ 8:00 PM (EAT)
+            </div>
+          </div>
+
+          <!-- PRIMARY ACTION -->
+          ${data.status === 'ACTIVE' ? `
+            <button class="btn btn-primary" style="width:100%; padding:12px; font-weight:800; background:#e63946; font-size:1rem;" onclick="arena.toggleSidebar(false); app.showView('arena');">
+              🔴 Enter Live Arena Now
+            </button>
+          ` : data.status === 'LOBBY' ? `
+            <button class="btn btn-primary" style="width:100%; padding:12px; font-weight:800; background:#10b981; font-size:1rem;" onclick="arena.toggleSidebar(false); app.showView('arena');">
+              🟢 Enter Arena Lobby (${data.participantCount} Joined)
+            </button>
+          ` : data.status === 'ENDED' ? `
+            <button class="btn btn-primary" style="width:100%; padding:12px; font-weight:800; background:#2563eb; font-size:1rem;" onclick="arena.toggleSidebar(false); app.showView('arena');">
+              🏆 View Grand Podium & Results
+            </button>
+          ` : `
+            <button class="btn btn-primary" style="width:100%; padding:12px; font-weight:800; font-size:0.95rem;" onclick="arena.toggleSidebar(false); app.showView('arena');">
+              🏆 Open Arena Room (${data.totalQuestions} Qs Queued)
+            </button>
+          `}
+        </div>
+
+        <!-- PODIUM REWARDS PREVIEW -->
+        <div style="background:#fff; border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:18px;">
+          <h5 style="font-size:0.88rem; font-weight:800; color:var(--navy); margin:0 0 10px; display:flex; align-items:center; gap:6px;">
+            <span>🏅</span> Weekly Champion Rewards
+          </h5>
+          <div style="display:flex; justify-content:space-between; text-align:center; gap:8px;">
+            <div style="flex:1; background:#fef3c7; border:1px solid #fde68a; border-radius:8px; padding:8px 4px;">
+              <div style="font-size:1.1rem;">🥇</div>
+              <div style="font-size:0.75rem; font-weight:800; color:#92400e;">1st Place</div>
+              <div style="font-size:0.85rem; font-weight:900; color:#b45309;">+150 XP</div>
+            </div>
+            <div style="flex:1; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:8px; padding:8px 4px;">
+              <div style="font-size:1.1rem;">🥈</div>
+              <div style="font-size:0.75rem; font-weight:800; color:#334155;">2nd Place</div>
+              <div style="font-size:0.85rem; font-weight:900; color:#475569;">+75 XP</div>
+            </div>
+            <div style="flex:1; background:#ffedd5; border:1px solid #fed7aa; border-radius:8px; padding:8px 4px;">
+              <div style="font-size:1.1rem;">🥉</div>
+              <div style="font-size:0.75rem; font-weight:800; color:#9a3412;">3rd Place</div>
+              <div style="font-size:0.85rem; font-weight:900; color:#c2410c;">+40 XP</div>
+            </div>
+          </div>
+          <div style="text-align:center; margin-top:8px; font-size:0.78rem; color:var(--text-muted);">
+            ⚡ Plus +10 XP for every question answered correctly!
+          </div>
+        </div>
+
+        ${isAdmin ? `
+          <!-- ADMIN CONTROL SECTION IN DRAWER -->
+          <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:14px; padding:16px;">
+            <h5 style="font-size:0.88rem; font-weight:800; color:#1e40af; margin:0 0 10px; display:flex; align-items:center; gap:6px;">
+              <span>⚙️</span> Supervisor Quick Controls
+            </h5>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <button class="btn btn-sm btn-primary" onclick="arena.toggleSidebar(false); app.showView('admin'); app.showAdminTab('arena');">
+                📥 Upload & Manage Arena Questions
+              </button>
+              <button class="btn btn-sm btn-success" style="background:#10b981; color:#fff;" onclick="arena.adminLaunchTestArena(); arena.toggleSidebar(false);">
+                🚀 Launch 5-Q Test Arena
+              </button>
+              ${data.status === 'SCHEDULED' ? `
+                <button class="btn btn-sm btn-outline" style="background:#fff;" onclick="arena.adminSetStatus('LOBBY'); arena.renderSidebarDrawerContent();">
+                  🟢 Open Lobby Early
+                </button>
+              ` : ''}
+              ${data.status === 'LOBBY' ? `
+                <button class="btn btn-sm btn-primary" onclick="arena.adminSetStatus('ACTIVE'); arena.renderSidebarDrawerContent();">
+                  ▶️ Start Question 1 Now
+                </button>
+              ` : ''}
+              ${data.status === 'ACTIVE' ? `
+                <button class="btn btn-sm btn-danger" onclick="arena.adminSetStatus('ENDED'); arena.renderSidebarDrawerContent();">
+                  🏁 End Contest & Reveal Podium
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        ` : ''}
+      `;
+
+      if (this.state.sidebarTimer) clearInterval(this.state.sidebarTimer);
+      const updateDigits = () => {
+        const digitsEl = document.getElementById('drawer-countdown-digits');
+        if (!digitsEl) {
+          clearInterval(this.state.sidebarTimer);
+          return;
+        }
+        const diff = Math.max(0, scheduledDate.getTime() - Date.now());
+        if (diff <= 0) {
+          digitsEl.innerHTML = '<span style="color:#10b981;">EVENT TIME!</span>';
+          return;
+        }
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+        const mins = Math.floor((diff / 1000 / 60) % 60);
+        const secs = Math.floor((diff / 1000) % 60);
+        digitsEl.textContent = `${days}d : ${String(hours).padStart(2,'0')}h : ${String(mins).padStart(2,'0')}m : ${String(secs).padStart(2,'0')}s`;
+      };
+
+      updateDigits();
+      this.state.sidebarTimer = setInterval(updateDigits, 1000);
+
+    } catch (err) {
+      console.warn('Failed to render drawer content:', err);
+      if (container) {
+        container.innerHTML = `<p style="color:#ef4444; font-size:0.85rem; padding:16px;">Failed to load arena status: ${err.message}</p>`;
+      }
+    }
   },
 
   async updateNavBadge() {
     try {
       const data = await API.getArenaCurrent();
-      const badge = document.getElementById('nav-arena-badge');
+      const badge = document.getElementById('arena-sidebar-badge');
       if (!badge) return;
 
       if (!data || !data.hasSession) {
         badge.innerText = 'SUN 8PM';
-        badge.style.background = 'rgba(255,255,255,0.2)';
+        badge.style.background = '#ffd166';
+        badge.style.color = '#0f2447';
         return;
       }
 
       if (data.status === 'ACTIVE') {
-        badge.innerText = 'LIVE NOW';
+        badge.innerText = 'LIVE';
         badge.style.background = '#e63946';
-        badge.classList.add('pulse-red');
+        badge.style.color = '#ffffff';
       } else if (data.status === 'LOBBY') {
-        badge.innerText = 'LOBBY OPEN';
+        badge.innerText = 'LOBBY';
         badge.style.background = '#10b981';
+        badge.style.color = '#ffffff';
       } else if (data.status === 'ENDED') {
-        badge.innerText = 'RESULTS';
+        badge.innerText = 'PODIUM';
         badge.style.background = '#2563eb';
+        badge.style.color = '#ffffff';
       } else {
         badge.innerText = 'SUN 8PM';
-        badge.style.background = 'rgba(255,255,255,0.25)';
+        badge.style.background = '#ffd166';
+        badge.style.color = '#0f2447';
       }
     } catch (err) {
       // Quiet fail

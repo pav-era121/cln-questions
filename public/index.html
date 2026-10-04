@@ -21,7 +21,6 @@
       <ul class="nav-links">
         <li><a class="nav-link active" onclick="app.showView('home')">Home</a></li>
         <li><a class="nav-link" onclick="app.showView('courses')">Courses</a></li>
-        <li><a class="nav-link" onclick="app.showView('arena')" style="display:flex; align-items:center; gap:6px; font-weight:700;"><span>🏆 Sunday Arena</span> <span id="nav-arena-badge" style="background:#e63946; color:#fff; font-size:0.65rem; font-weight:800; padding:2px 6px; border-radius:10px;">SUN 8PM</span></a></li>
         <li class="student-only" style="display:none;"><a class="nav-link" onclick="app.showView('dashboard')">Dashboard</a></li>
         <li class="student-only" style="display:none;"><a class="nav-link" onclick="app.showView('history')">History</a></li>
         <li class="admin-only" style="display:none;"><a class="nav-link" onclick="app.showView('admin')">Admin Panel</a></li>
@@ -949,6 +948,34 @@
     </svg>
     <span class="floating-tg-text">Need Help? Ask Admin</span>
   </a>
+
+  <!-- SUNDAY ARENA FLOATING SIDEBAR TAB (ZERO NAVBAR CLUTTER) -->
+  <button id="arena-sidebar-trigger" class="arena-sidebar-trigger" onclick="arena.toggleSidebar()" title="Click to open Sunday Live Arena Side Panel">
+    <span class="tab-icon">🏆</span>
+    <span class="tab-title">Sunday Arena</span>
+    <span id="arena-sidebar-badge" class="tab-badge">SUN 8PM</span>
+  </button>
+
+  <!-- SUNDAY ARENA SLIDE-OUT SIDE PANEL DRAWER & OVERLAY -->
+  <div id="arena-sidebar-overlay" class="arena-drawer-overlay" onclick="arena.toggleSidebar(false)"></div>
+  <aside id="arena-sidebar-drawer" class="arena-drawer" aria-label="Sunday Arena Side Panel">
+    <div class="arena-drawer-header">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <span style="font-size:1.7rem;">🏆</span>
+        <div>
+          <h3 style="font-size:1.15rem; font-weight:800; margin:0; line-height:1.2; color:#fff;">Sunday Live Arena</h3>
+          <span id="arena-drawer-status-badge" style="font-size:0.7rem; font-weight:800; background:#ffd166; color:#0f2447; padding:2px 8px; border-radius:10px; text-transform:uppercase; display:inline-block; margin-top:2px;">
+            SCHEDULED
+          </span>
+        </div>
+      </div>
+      <button class="arena-drawer-close" onclick="arena.toggleSidebar(false)" title="Close Side Panel">✕</button>
+    </div>
+
+    <div class="arena-drawer-body" id="arena-drawer-body-content">
+      <!-- Injected dynamically by arena.renderSidebarDrawerContent() -->
+    </div>
+  </aside>
 
   <!-- APPLICATION SCRIPTS -->
   <script src="/js/api.js"></script>

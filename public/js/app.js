@@ -86,6 +86,15 @@ const app = {
       }
     }
 
+    // Dismiss arena drawer if open and toggle trigger visibility
+    if (typeof arena !== 'undefined' && arena.toggleSidebar) {
+      arena.toggleSidebar(false);
+    }
+    const sideTrigger = document.getElementById('arena-sidebar-trigger');
+    if (sideTrigger) {
+      sideTrigger.style.display = viewName === 'arena' ? 'none' : 'flex';
+    }
+
     // View specific logic
     if (viewName === 'home') {
       this.renderHomeCourses();
