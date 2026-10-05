@@ -98,23 +98,70 @@ function authenticateToken(req, res, next) {
   });
 }
 
-// User Status Authorization Middleware (Enforces Suspended Status Server-Side)
+const PAYMENT_INFO = {
+  amount: 380,
+  originalPrice: 600,
+  discount: '37% OFF',
+  bankName: 'Commercial Bank of Ethiopia (CBE)',
+  accountNumber: '1000253063512',
+  accountName: 'EYOB',
+  telegramAdmin: '@CLN_AAU_Admin',
+  telegramUrl: 'https://t.me/CLN_AAU_Admin'
+};
+
+// User Status & 3-Day Free Trial Authorization Middleware
 async function verifyActiveUser(req, res, next) {
   try {
-    const user = await db.prepare('SELECT id, full_name, email, phone, status, total_xp FROM users WHERE id = ?').get(req.user.id);
+    const user = await db.prepare('SELECT id, full_name, email, phone, status, is_paid, tag, created_at, trial_ends_at, total_xp FROM users WHERE id = ?').get(req.user.id);
 
     if (!user) {
       return res.status(404).json({ error: 'User record not found.' });
     }
 
+    const isAdmin = user.email === 'admin@cln.edu.et' || user.email === 'eyoba7619@gmail.com';
+    if (isAdmin) {
+      req.dbUser = user;
+      return next();
+    }
+
+    // 1. Explicitly suspended
     if (user.status === 'SUSPENDED') {
       return res.status(403).json({
         suspended: true,
+        trialExpired: false,
         error: 'Your account has been suspended.',
-        message: 'You currently cannot access CLN Questions. If you have any issue, question, or need support, contact Admin on Telegram: @CLN_AAU_Admin',
+        message: 'Your account is suspended. To activate your account, complete your payment of 380 Birr (discounted from 600 Birr) via CBE account 1000253063512 (EYOB) and send your receipt to @CLN_AAU_Admin on Telegram.',
         supportContact: '@CLN_AAU_Admin',
-        telegramUrl: 'https://t.me/CLN_AAU_Admin'
+        telegramUrl: 'https://t.me/CLN_AAU_Admin',
+        paymentInfo: PAYMENT_INFO
       });
+    }
+
+    // 2. 3-Day (72h) Free Trial Check for Unpaid Students
+    if (!user.is_paid) {
+      const now = Date.now();
+      const trialEndMs = user.trial_ends_at 
+        ? new Date(user.trial_ends_at).getTime() 
+        : (new Date(user.created_at).getTime() + 72 * 3600 * 1000);
+
+      if (now > trialEndMs) {
+        // 72 hours passed! Auto-update user status in DB
+        try {
+          await db.prepare("UPDATE users SET status = 'SUSPENDED' WHERE id = ?").run(user.id);
+        } catch (e) {
+          console.error('Failed to auto-suspend expired user:', e);
+        }
+
+        return res.status(403).json({
+          suspended: true,
+          trialExpired: true,
+          error: 'Your 3-day free trial has expired.',
+          message: 'Your 72-hour free trial has ended. Please complete your payment of 380 Birr (discounted from 600 Birr) via CBE account 1000253063512 (EYOB) and send your receipt to @CLN_AAU_Admin on Telegram to reactivate your account.',
+          supportContact: '@CLN_AAU_Admin',
+          telegramUrl: 'https://t.me/CLN_AAU_Admin',
+          paymentInfo: PAYMENT_INFO
+        });
+      }
     }
 
     req.dbUser = user;
@@ -182,9 +229,12 @@ app.post('/api/auth/register', async (req, res) => {
     const passwordHash = bcrypt.hashSync(password, salt);
     const userId = 'u_' + Date.now() + '_' + Math.round(Math.random() * 1000);
 
+    const createdAt = new Date().toISOString();
+    const trialEndsAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
+
     await db.prepare(`
-      INSERT INTO users (id, full_name, email, phone, password_hash, marketing_consent, status, total_xp, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE', 0, ?)
+      INSERT INTO users (id, full_name, email, phone, password_hash, marketing_consent, status, total_xp, created_at, trial_ends_at, is_paid, tag)
+      VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE', 0, ?, ?, 0, '')
     `).run(
       userId,
       fullName.trim(),
@@ -192,13 +242,14 @@ app.post('/api/auth/register', async (req, res) => {
       validPhone,
       passwordHash,
       marketingConsent ? 1 : 0,
-      new Date().toISOString()
+      createdAt,
+      trialEndsAt
     );
 
     const token = jwt.sign({ id: userId, email: email.toLowerCase().trim(), name: fullName }, JWT_SECRET, { expiresIn: '7d' });
 
     res.status(201).json({
-      message: 'Registration successful!',
+      message: 'Registration successful! Welcome to your 3-day free trial.',
       token,
       user: {
         id: userId,
@@ -206,7 +257,14 @@ app.post('/api/auth/register', async (req, res) => {
         email: email.toLowerCase().trim(),
         phone: validPhone,
         totalXp: 0,
-        status: 'ACTIVE'
+        status: 'ACTIVE',
+        isPaid: false,
+        isTrial: true,
+        hoursLeft: 72,
+        createdAt,
+        trialEndsAt,
+        tag: '',
+        paymentInfo: PAYMENT_INFO
       }
     });
   } catch (err) {
@@ -236,13 +294,28 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'Invalid email/phone or password.' });
     }
 
-    if (user.status === 'SUSPENDED') {
+    const isAdmin = user.email === 'admin@cln.edu.et' || user.email === 'eyoba7619@gmail.com';
+    const now = Date.now();
+    const trialEndMs = user.trial_ends_at 
+      ? new Date(user.trial_ends_at).getTime() 
+      : (new Date(user.created_at).getTime() + 72 * 3600 * 1000);
+    const isTrialExpired = !isAdmin && !user.is_paid && now > trialEndMs;
+
+    if (user.status === 'SUSPENDED' || isTrialExpired) {
+      if (isTrialExpired && user.status !== 'SUSPENDED') {
+        try {
+          await db.prepare("UPDATE users SET status = 'SUSPENDED' WHERE id = ?").run(user.id);
+          user.status = 'SUSPENDED';
+        } catch (e) {}
+      }
       return res.status(403).json({
         suspended: true,
-        error: 'Your account has been suspended.',
-        message: 'You currently cannot access CLN Questions. If you have any issue, question, or need support, contact Admin on Telegram: @CLN_AAU_Admin',
+        trialExpired: isTrialExpired,
+        error: isTrialExpired ? 'Your 3-day free trial has expired.' : 'Your account has been suspended.',
+        message: 'Please complete your payment of 380 Birr (discounted from 600 Birr) via CBE account 1000253063512 (EYOB) and send your receipt to @CLN_AAU_Admin on Telegram to reactivate your account.',
         supportContact: '@CLN_AAU_Admin',
-        telegramUrl: 'https://t.me/CLN_AAU_Admin'
+        telegramUrl: 'https://t.me/CLN_AAU_Admin',
+        paymentInfo: PAYMENT_INFO
       });
     }
 
@@ -250,6 +323,7 @@ app.post('/api/auth/login', async (req, res) => {
     await db.prepare('UPDATE users SET last_active = ? WHERE id = ?').run(new Date().toISOString(), user.id);
 
     const token = jwt.sign({ id: user.id, email: user.email, name: user.full_name }, JWT_SECRET, { expiresIn: '7d' });
+    const hoursLeft = (!user.is_paid && !isAdmin) ? Math.max(0, Math.ceil((trialEndMs - now) / (3600 * 1000))) : 0;
 
     res.json({
       message: 'Login successful!',
@@ -260,7 +334,14 @@ app.post('/api/auth/login', async (req, res) => {
         email: user.email,
         phone: user.phone,
         totalXp: user.total_xp,
-        status: user.status
+        status: user.status,
+        isPaid: Boolean(user.is_paid || isAdmin),
+        isTrial: Boolean(!user.is_paid && !isAdmin && hoursLeft > 0),
+        hoursLeft,
+        createdAt: user.created_at,
+        trialEndsAt: user.trial_ends_at,
+        tag: user.tag || '',
+        paymentInfo: PAYMENT_INFO
       }
     });
   } catch (err) {
@@ -270,20 +351,53 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {
-    const user = await db.prepare('SELECT id, full_name, email, phone, status, total_xp, created_at FROM users WHERE id = ?').get(req.user.id);
+    const user = await db.prepare('SELECT id, full_name, email, phone, status, is_paid, tag, created_at, trial_ends_at, total_xp FROM users WHERE id = ?').get(req.user.id);
     if (!user) return res.status(404).json({ error: 'User not found.' });
 
-    if (user.status === 'SUSPENDED') {
+    const isAdmin = user.email === 'admin@cln.edu.et' || user.email === 'eyoba7619@gmail.com';
+    const now = Date.now();
+    const trialEndMs = user.trial_ends_at 
+      ? new Date(user.trial_ends_at).getTime() 
+      : (new Date(user.created_at).getTime() + 72 * 3600 * 1000);
+    const isTrialExpired = !isAdmin && !user.is_paid && now > trialEndMs;
+
+    if (user.status === 'SUSPENDED' || isTrialExpired) {
+      if (isTrialExpired && user.status !== 'SUSPENDED') {
+        try {
+          await db.prepare("UPDATE users SET status = 'SUSPENDED' WHERE id = ?").run(user.id);
+          user.status = 'SUSPENDED';
+        } catch (e) {}
+      }
       return res.status(403).json({
         suspended: true,
-        error: 'Your account has been suspended.',
-        message: 'You currently cannot access CLN Questions. If you have any issue, question, or need support, contact Admin on Telegram: @CLN_AAU_Admin',
+        trialExpired: isTrialExpired,
+        error: isTrialExpired ? 'Your 3-day free trial has expired.' : 'Your account has been suspended.',
+        message: 'Please complete your payment of 380 Birr (discounted from 600 Birr) via CBE account 1000253063512 (EYOB) and send your receipt to @CLN_AAU_Admin on Telegram.',
         supportContact: '@CLN_AAU_Admin',
-        telegramUrl: 'https://t.me/CLN_AAU_Admin'
+        telegramUrl: 'https://t.me/CLN_AAU_Admin',
+        paymentInfo: PAYMENT_INFO
       });
     }
 
-    res.json({ user });
+    const hoursLeft = (!user.is_paid && !isAdmin) ? Math.max(0, Math.ceil((trialEndMs - now) / (3600 * 1000))) : 0;
+
+    res.json({
+      user: {
+        id: user.id,
+        fullName: user.full_name,
+        email: user.email,
+        phone: user.phone,
+        status: user.status,
+        isPaid: Boolean(user.is_paid || isAdmin),
+        isTrial: Boolean(!user.is_paid && !isAdmin && hoursLeft > 0),
+        hoursLeft,
+        createdAt: user.created_at,
+        trialEndsAt: user.trial_ends_at,
+        tag: user.tag || '',
+        totalXp: user.total_xp,
+        paymentInfo: PAYMENT_INFO
+      }
+    });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch user profile.' });
   }
@@ -677,7 +791,7 @@ app.get('/api/admin/stats', authenticateToken, requireAdmin, async (req, res) =>
 app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const users = await db.prepare(`
-      SELECT u.id, u.full_name, u.email, u.phone, u.status, u.total_xp, u.created_at, u.last_active,
+      SELECT u.id, u.full_name, u.email, u.phone, u.status, u.is_paid, u.tag, u.created_at, u.trial_ends_at, u.last_active, u.total_xp,
              COUNT(qa.id) AS quiz_attempts
       FROM users u
       LEFT JOIN quiz_attempts qa ON u.id = qa.user_id AND qa.completed_at IS NOT NULL
@@ -686,23 +800,64 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) =>
       ORDER BY u.created_at DESC
     `).all();
 
-    res.json({ users });
+    const now = Date.now();
+    const enhancedUsers = users.map(u => {
+      const trialEndMs = u.trial_ends_at 
+        ? new Date(u.trial_ends_at).getTime() 
+        : (new Date(u.created_at).getTime() + 72 * 3600 * 1000);
+      const isPaid = Boolean(u.is_paid);
+      const isSuspended = u.status === 'SUSPENDED';
+      const isTrialActive = !isPaid && !isSuspended && now < trialEndMs;
+      const isTrialExpired = !isPaid && now >= trialEndMs;
+      const hoursLeft = Math.max(0, Math.ceil((trialEndMs - now) / (3600 * 1000)));
+
+      return {
+        ...u,
+        is_paid: isPaid,
+        is_trial_active: isTrialActive,
+        is_trial_expired: isTrialExpired,
+        hours_left: hoursLeft
+      };
+    });
+
+    res.json({ users: enhancedUsers });
   } catch (err) {
     res.status(500).json({ error: 'Failed to load student list: ' + err.message });
   }
 });
 
 app.patch('/api/admin/users/:id/status', authenticateToken, requireAdmin, async (req, res) => {
-  const { status } = req.body;
+  const { status, isPaid } = req.body;
   if (!['ACTIVE', 'SUSPENDED'].includes(status)) {
     return res.status(400).json({ error: 'Status must be ACTIVE or SUSPENDED.' });
   }
 
   try {
-    await db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, req.params.id);
-    res.json({ message: `User status updated to ${status}.` });
+    if (status === 'ACTIVE') {
+      const paidVal = (isPaid !== undefined) ? (isPaid ? 1 : 0) : 1;
+      await db.prepare('UPDATE users SET status = ?, is_paid = ? WHERE id = ?').run(status, paidVal, req.params.id);
+      res.json({ message: `User activated successfully with full access.` });
+    } else {
+      await db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, req.params.id);
+      res.json({ message: `User status updated to ${status}.` });
+    }
   } catch (err) {
     res.status(500).json({ error: 'Failed to update user status.' });
+  }
+});
+
+app.patch('/api/admin/users/:id/tag', authenticateToken, requireAdmin, async (req, res) => {
+  const { tag } = req.body;
+  const cleanTag = (tag || '').trim();
+  if (cleanTag.length > 10) {
+    return res.status(400).json({ error: 'Tag cannot exceed 10 characters.' });
+  }
+
+  try {
+    await db.prepare('UPDATE users SET tag = ? WHERE id = ?').run(cleanTag, req.params.id);
+    res.json({ message: 'Tag updated successfully.', tag: cleanTag });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update user tag: ' + err.message });
   }
 });
 

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CLN Questions — Practice. Improve. Get Ahead.</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/style.css?v=1.2">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎓</text></svg>">
 </head>
 <body>
@@ -619,36 +619,82 @@
       </div>
     </section>
 
-    <!-- 11. SUSPENDED USER VIEW -->
-    <section id="view-suspended" class="view-section" style="display:none; padding:60px 0;">
-      <div class="container" style="max-width:620px;">
-        <div class="card" style="text-align:center; padding:48px 32px; border:2px solid var(--red); box-shadow:var(--shadow-lg);">
-          <div style="font-size:3.5rem; margin-bottom:12px;">🚫</div>
-          <h2 style="color:var(--red); font-size:1.75rem; font-weight:800; margin-bottom:12px;">Account Suspended</h2>
-          <p style="color:var(--text-main); font-size:1.02rem; line-height:1.6; margin-bottom:20px;">
-            Your account currently cannot access CLN Questions. If you have any issue, question, need support, or believe your account was suspended by mistake, please contact the administrator directly on Telegram.
-          </p>
+    <!-- 11. SUSPENDED / TRIAL EXPIRED VIEW -->
+    <section id="view-suspended" class="view-section" style="display:none; padding:50px 0;">
+      <div class="container" style="max-width:680px;">
+        <div class="card" style="padding:40px 32px; border:2px solid var(--primary); box-shadow:var(--shadow-lg); border-radius:16px;">
+          
+          <div style="text-align:center; margin-bottom:24px;">
+            <div style="font-size:3.2rem; margin-bottom:8px;">⏳</div>
+            <h2 id="suspended-title" style="color:var(--navy); font-size:1.85rem; font-weight:800; margin-bottom:8px;">
+              3-Day Free Trial Ended
+            </h2>
+            <p id="suspended-subtitle" style="color:var(--text-main); font-size:1.02rem; line-height:1.5; margin:0 auto; max-width:520px;">
+              Your 72-hour free trial has concluded. Complete your one-time payment to unlock unlimited lifetime access to all course questions, detailed explanations, mock exams, and the Sunday Live Arena!
+            </p>
+          </div>
 
-          <div style="background:var(--blue-soft); border:1px solid var(--blue-light); border-radius:12px; padding:18px; margin-bottom:24px; text-align:left;">
-            <div style="font-weight:700; color:var(--navy); font-size:0.95rem; margin-bottom:6px;">Direct Administrator Support:</div>
-            <div style="color:var(--text-main); font-size:0.95rem; display:flex; align-items:center; gap:8px;">
-              <span>Telegram:</span>
-              <strong style="color:#229ED9; font-size:1.05rem;">@CLN_AAU_Admin</strong>
+          <!-- SPECIAL OFFER BANNER -->
+          <div style="background:linear-gradient(135deg, #1e3a8a, #2563eb); color:#fff; border-radius:12px; padding:18px 24px; text-align:center; margin-bottom:24px; box-shadow:0 4px 12px rgba(37,99,235,0.25);">
+            <div style="text-transform:uppercase; font-size:0.78rem; letter-spacing:1px; font-weight:800; opacity:0.9; margin-bottom:4px;">Exclusive Student Discount</div>
+            <div style="font-size:1.6rem; font-weight:900; display:flex; align-items:center; justify-content:center; gap:10px;">
+              <span>380 Birr (ETB)</span>
+              <span style="font-size:1.05rem; text-decoration:line-through; opacity:0.65; font-weight:500;">600 Birr</span>
+              <span style="background:#e11d48; font-size:0.75rem; padding:2px 8px; border-radius:6px; font-weight:800; letter-spacing:0.5px;">SAVE 37%</span>
             </div>
-            <div style="font-size:0.83rem; color:var(--text-muted); margin-top:6px;">
-              Direct contact for student account reinstatement, quiz questions, and technical support.
+            <div style="font-size:0.85rem; opacity:0.9; margin-top:4px;">One-time payment • Lifetime access to all chapters & Sunday Arena</div>
+          </div>
+
+          <!-- BANK PAYMENT DETAILS -->
+          <div style="background:var(--bg-main); border:1.5px solid var(--border); border-radius:12px; padding:20px; margin-bottom:24px;">
+            <div style="font-weight:800; color:var(--navy); font-size:1rem; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+              <span>🏦 Commercial Bank of Ethiopia (CBE)</span>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:16px;">
+              <div style="background:#fff; border:1px solid var(--border); border-radius:8px; padding:12px;">
+                <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600; text-transform:uppercase;">Account Name</div>
+                <div style="font-size:1.15rem; font-weight:800; color:var(--navy); margin-top:2px;">EYOB</div>
+              </div>
+
+              <div style="background:#fff; border:1px solid var(--border); border-radius:8px; padding:12px;">
+                <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600; text-transform:uppercase;">Amount Due</div>
+                <div style="font-size:1.15rem; font-weight:800; color:#16a34a; margin-top:2px;">380 ETB</div>
+              </div>
+            </div>
+
+            <div style="background:#fff; border:1px solid var(--border); border-radius:8px; padding:12px 14px; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+              <div>
+                <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600; text-transform:uppercase;">CBE Account Number</div>
+                <div id="cbe-account-number" style="font-size:1.25rem; font-weight:900; letter-spacing:1px; color:var(--navy); font-family:monospace; margin-top:2px;">1000253063512</div>
+              </div>
+              <button id="btn-copy-cbe" class="btn btn-secondary btn-sm" onclick="app.copyCbeAccount(this)" style="display:flex; align-items:center; gap:6px; font-weight:700;">
+                <span>📋 Copy Account Number</span>
+              </button>
             </div>
           </div>
 
+          <!-- ACTIVATION INSTRUCTIONS -->
+          <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:18px; margin-bottom:24px;">
+            <div style="font-weight:700; color:var(--navy); font-size:0.95rem; margin-bottom:8px;">Easy 3-Step Activation:</div>
+            <ol style="margin:0; padding-left:20px; font-size:0.9rem; color:var(--text-main); line-height:1.6;">
+              <li>Transfer <strong>380 Birr</strong> to CBE account <strong>1000253063512 (EYOB)</strong> via CBE Mobile Banking, Telebirr, or CBE branch.</li>
+              <li>Take a <strong>screenshot or photo of your payment receipt / SMS confirmation</strong>.</li>
+              <li>Send the receipt to Admin on Telegram: <a href="https://t.me/CLN_AAU_Admin" target="_blank" style="color:#229ED9; font-weight:700; text-decoration:none;">@CLN_AAU_Admin</a>. Your account will be activated immediately!</li>
+            </ol>
+          </div>
+
+          <!-- ACTION BUTTONS -->
           <div style="display:flex; flex-direction:column; gap:12px; align-items:center;">
-            <a href="https://t.me/CLN_AAU_Admin" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-lg" style="background:#229ED9; border-color:#229ED9; width:100%; max-width:380px; display:inline-flex; justify-content:center; align-items:center; gap:10px;">
+            <a href="https://t.me/CLN_AAU_Admin" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-lg" style="background:#229ED9; border-color:#229ED9; width:100%; max-width:440px; display:inline-flex; justify-content:center; align-items:center; gap:10px; font-weight:700;">
               <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
               </svg>
-              <span>Connect with @CLN_AAU_Admin</span>
+              <span>Send Payment Receipt to @CLN_AAU_Admin</span>
             </a>
-            <button class="btn btn-secondary" onclick="app.handleLogout()" style="width:100%; max-width:380px;">Log Out & Switch Account</button>
+            <button class="btn btn-secondary" onclick="app.handleLogout()" style="width:100%; max-width:440px;">Log Out & Switch Account</button>
           </div>
+
         </div>
       </div>
     </section>
@@ -740,18 +786,27 @@
 
         <!-- TAB 1: USERS TABLE -->
         <div id="admin-tab-users" class="card">
-          <h3 style="font-size:1.1rem; font-weight:700; color:var(--navy); margin-bottom:16px;">Registered Student Accounts</h3>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
+            <div>
+              <h3 style="font-size:1.15rem; font-weight:800; color:var(--navy); margin:0;">Registered Student Accounts</h3>
+              <p style="font-size:0.85rem; color:var(--text-muted); margin:4px 0 0 0;">Manage 3-day trial access, payment activations, student tags (max 10 chars), and registration dates.</p>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <input type="text" id="admin-user-search-input" placeholder="Search student, phone, or tag..." oninput="app.filterAdminUsers()" style="padding:6px 12px; border:1px solid var(--border); border-radius:6px; font-size:0.85rem; min-width:230px;" />
+              <button class="btn btn-secondary btn-sm" onclick="app.loadAdminUsers()">🔄 Refresh</button>
+            </div>
+          </div>
           <div style="overflow-x:auto;">
             <table class="admin-table">
               <thead>
                 <tr>
-                  <th>Student Name</th>
-                  <th>Email</th>
+                  <th>Student</th>
                   <th>Phone</th>
-                  <th>XP</th>
-                  <th>Attempts</th>
-                  <th>Status</th>
-                  <th>Action</th>
+                  <th>Joined Date</th>
+                  <th>Tag (≤10)</th>
+                  <th>Plan / Status</th>
+                  <th>XP & Quizzes</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody id="admin-users-tbody">
@@ -978,9 +1033,9 @@
   </aside>
 
   <!-- APPLICATION SCRIPTS -->
-  <script src="/js/api.js"></script>
-  <script src="/js/quiz.js"></script>
-  <script src="/js/arena.js"></script>
-  <script src="/js/app.js"></script>
+  <script src="/js/api.js?v=1.2"></script>
+  <script src="/js/quiz.js?v=1.2"></script>
+  <script src="/js/arena.js?v=1.2"></script>
+  <script src="/js/app.js?v=1.2"></script>
 </body>
 </html>

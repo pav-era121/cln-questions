@@ -142,10 +142,17 @@ const API = {
     return await this.request('/admin/content-tree');
   },
 
-  async updateUserStatus(userId, status) {
+  async updateUserStatus(userId, status, isPaid) {
     return await this.request(`/admin/users/${userId}/status`, {
       method: 'PATCH',
-      body: JSON.stringify({ status })
+      body: JSON.stringify({ status, isPaid })
+    });
+  },
+
+  async updateUserTag(userId, tag) {
+    return await this.request(`/admin/users/${userId}/tag`, {
+      method: 'PATCH',
+      body: JSON.stringify({ tag })
     });
   },
 

@@ -26,10 +26,22 @@ const app = {
     });
   },
 
-  checkAuth() {
+  async checkAuth() {
     const user = API.getUser();
     this.state.user = user;
     this.renderNavUserArea();
+
+    if (API.getToken()) {
+      try {
+        const freshUser = await API.getProfile();
+        if (freshUser) {
+          this.state.user = freshUser;
+          this.renderNavUserArea();
+        }
+      } catch (err) {
+        // Will dispatch cln:user-suspended if suspended or trial expired
+      }
+    }
   },
 
   renderNavUserArea() {
@@ -45,9 +57,21 @@ const app = {
       studentNavs.forEach(el => el.style.display = isAdmin ? 'none' : 'block');
       adminNavs.forEach(el => el.style.display = isAdmin ? 'block' : 'none');
 
+      let planBadge = '';
+      if (!isAdmin) {
+        if (user.isPaid) {
+          planBadge = `<span class="status-badge status-paid" style="font-size:0.75rem; text-transform:none;">👑 Lifetime Member</span>`;
+        } else if (user.hoursLeft > 0) {
+          planBadge = `<span class="status-badge status-trial" style="font-size:0.75rem; cursor:pointer; text-transform:none;" onclick="app.showTrialUpgradeInfo()" title="Click to view upgrade information">⏳ Trial: ${user.hoursLeft}h left</span>`;
+        } else {
+          planBadge = `<span class="status-badge status-expired" style="font-size:0.75rem; cursor:pointer; text-transform:none;" onclick="app.showTrialUpgradeInfo()">⌛ Trial Expired (Pay 380 ETB)</span>`;
+        }
+      }
+
       area.innerHTML = `
-        <div class="user-pill">
-          <span style="font-weight:700; font-size:0.9rem;">${user.fullName} ${isAdmin ? '(Admin)' : ''}</span>
+        <div class="user-pill" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span style="font-weight:700; font-size:0.9rem;">${this.escapeHtml(user.fullName)} ${isAdmin ? '(Admin)' : ''}</span>
+          ${planBadge}
           ${!isAdmin ? `<span class="xp-badge">⚡ ${user.totalXp || 0} XP</span>` : ''}
           <button class="btn btn-sm btn-secondary" style="color:#fff; border-color:rgba(255,255,255,0.4); padding:4px 10px;" onclick="app.handleLogout()">Log Out</button>
         </div>
@@ -1037,38 +1061,201 @@ const app = {
   async loadAdminUsers() {
     try {
       const data = await API.getAdminUsers();
-      const users = data.users || [];
-      const tbody = document.getElementById('admin-users-tbody');
-
-      tbody.innerHTML = users.map(u => `
-        <tr>
-          <td><strong>${u.full_name}</strong></td>
-          <td>${u.email}</td>
-          <td>${u.phone}</td>
-          <td>⚡ ${u.total_xp} XP</td>
-          <td>${u.quiz_attempts}</td>
-          <td><span class="status-badge ${u.status === 'ACTIVE' ? 'status-active' : 'status-suspended'}">${u.status}</span></td>
-          <td>
-            ${u.status === 'ACTIVE' ? `
-              <button class="btn btn-danger btn-sm" onclick="app.toggleUserStatus('${u.id}', 'SUSPENDED')">Suspend</button>
-            ` : `
-              <button class="btn btn-success btn-sm" onclick="app.toggleUserStatus('${u.id}', 'ACTIVE')">Reactivate</button>
-            `}
-          </td>
-        </tr>
-      `).join('');
+      this.state.adminUsers = data.users || [];
+      this.renderAdminUsers(this.state.adminUsers);
     } catch (err) {
       console.error('Failed to load admin users:', err);
     }
   },
 
-  async toggleUserStatus(userId, newStatus) {
+  renderAdminUsers(users) {
+    const tbody = document.getElementById('admin-users-tbody');
+    if (!tbody) return;
+
+    if (!users || users.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:32px; color:var(--text-muted);">No student records found.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = users.map(u => {
+      // Format Joined Date
+      let joinedHtml = '<span style="color:var(--text-muted);">N/A</span>';
+      if (u.created_at) {
+        const d = new Date(u.created_at);
+        if (!isNaN(d.getTime())) {
+          const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          const timeStr = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+          joinedHtml = `<div style="font-size:0.85rem; line-height:1.2;"><strong>${dateStr}</strong><br><small style="color:var(--text-muted);">${timeStr}</small></div>`;
+        }
+      }
+
+      // Format Tag (strictly max 10 chars)
+      const cleanTag = (u.tag || '').trim();
+      let tagHtml = '';
+      if (cleanTag) {
+        tagHtml = `
+          <div style="display:flex; align-items:center; gap:4px;">
+            <span class="user-tag-pill" title="${this.escapeHtml(cleanTag)}">🏷️ ${this.escapeHtml(cleanTag)}</span>
+            <button class="btn btn-secondary btn-sm" style="padding:2px 6px; font-size:0.75rem;" title="Edit tag (max 10 chars)" onclick="app.promptEditTag('${u.id}', '${this.escapeHtml(cleanTag)}')">✏️</button>
+          </div>
+        `;
+      } else {
+        tagHtml = `
+          <button class="btn btn-secondary btn-sm" style="padding:2px 8px; font-size:0.75rem;" onclick="app.promptEditTag('${u.id}', '')">+ Tag</button>
+        `;
+      }
+
+      // Format Plan / Status Badge
+      let statusHtml = '';
+      if (u.is_paid) {
+        statusHtml = `<span class="status-badge status-paid">👑 PAID</span>`;
+      } else if (u.status === 'SUSPENDED') {
+        statusHtml = `<span class="status-badge status-suspended">🚫 SUSPENDED</span>`;
+      } else if (u.is_trial_active) {
+        statusHtml = `<span class="status-badge status-trial" title="${u.hours_left}h left in 3-day trial">⏳ Trial (${u.hours_left}h left)</span>`;
+      } else {
+        statusHtml = `<span class="status-badge status-expired" title="3-day free trial concluded">⌛ Trial Expired</span>`;
+      }
+
+      // Format Action Buttons
+      const isPaid = Boolean(u.is_paid);
+      const isSuspended = u.status === 'SUSPENDED';
+      let actionButtons = [];
+
+      if (!isPaid || isSuspended) {
+        actionButtons.push(`
+          <button class="btn btn-success btn-sm" style="background:#16a34a; font-weight:700; padding:4px 8px;" title="Activate student full access upon receipt of 380 ETB" onclick="app.activateUserPaid('${u.id}')">
+            ✅ Activate (Paid)
+          </button>
+        `);
+      }
+
+      if (u.status === 'ACTIVE') {
+        actionButtons.push(`
+          <button class="btn btn-danger btn-sm" style="padding:4px 8px;" onclick="app.toggleUserStatus('${u.id}', 'SUSPENDED')">
+            ⏸️ Suspend
+          </button>
+        `);
+      } else {
+        actionButtons.push(`
+          <button class="btn btn-secondary btn-sm" style="padding:4px 8px;" onclick="app.toggleUserStatus('${u.id}', 'ACTIVE', ${isPaid})">
+            ▶️ Unsuspend
+          </button>
+        `);
+      }
+
+      return `
+        <tr>
+          <td>
+            <strong>${this.escapeHtml(u.full_name)}</strong><br>
+            <small style="color:var(--text-muted);">${this.escapeHtml(u.email)}</small>
+          </td>
+          <td><code>${this.escapeHtml(u.phone)}</code></td>
+          <td>${joinedHtml}</td>
+          <td>${tagHtml}</td>
+          <td>${statusHtml}</td>
+          <td>
+            ⚡ ${u.total_xp || 0} XP<br>
+            <small style="color:var(--text-muted);">${u.quiz_attempts || 0} quizzes</small>
+          </td>
+          <td>
+            <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+              ${actionButtons.join('')}
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  },
+
+  filterAdminUsers() {
+    const input = document.getElementById('admin-user-search-input');
+    if (!input || !this.state.adminUsers) return;
+    const q = input.value.toLowerCase().trim();
+    if (!q) {
+      this.renderAdminUsers(this.state.adminUsers);
+      return;
+    }
+    const filtered = this.state.adminUsers.filter(u => 
+      (u.full_name && u.full_name.toLowerCase().includes(q)) ||
+      (u.email && u.email.toLowerCase().includes(q)) ||
+      (u.phone && u.phone.toLowerCase().includes(q)) ||
+      (u.tag && u.tag.toLowerCase().includes(q))
+    );
+    this.renderAdminUsers(filtered);
+  },
+
+  async promptEditTag(userId, currentTag) {
+    const entered = prompt('Enter student tag (max 10 characters):', currentTag || '');
+    if (entered === null) return; // user clicked Cancel
+    const cleanTag = entered.trim();
+    if (cleanTag.length > 10) {
+      alert(`Tag exceeds 10 characters limit! You typed ${cleanTag.length} characters.`);
+      return;
+    }
     try {
-      await API.updateUserStatus(userId, newStatus);
+      await API.updateUserTag(userId, cleanTag);
+      await this.loadAdminUsers();
+    } catch (err) {
+      alert('Failed to update tag: ' + err.message);
+    }
+  },
+
+  async activateUserPaid(userId) {
+    if (!confirm('Confirm activating this student account with Full Lifetime Paid Access (380 ETB payment received)?')) {
+      return;
+    }
+    try {
+      await API.updateUserStatus(userId, 'ACTIVE', true);
+      alert('Student account activated with lifetime full access!');
+      await this.loadAdminUsers();
+    } catch (err) {
+      alert('Failed to activate student account: ' + err.message);
+    }
+  },
+
+  async toggleUserStatus(userId, newStatus, isPaid) {
+    try {
+      await API.updateUserStatus(userId, newStatus, isPaid);
       await this.loadAdminUsers();
     } catch (err) {
       alert('Failed to update user status: ' + err.message);
     }
+  },
+
+  copyCbeAccount(btn) {
+    const acc = '1000253063512';
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(acc).then(() => {
+        this.indicateCopied(btn);
+      }).catch(() => {
+        this.fallbackCopy(acc, btn);
+      });
+    } else {
+      this.fallbackCopy(acc, btn);
+    }
+  },
+
+  indicateCopied(btn) {
+    if (!btn) return;
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<span>✅ Copied (1000253063512)!</span>';
+    btn.style.background = '#16a34a';
+    btn.style.color = '#fff';
+    setTimeout(() => {
+      btn.innerHTML = orig;
+      btn.style.background = '';
+      btn.style.color = '';
+    }, 2500);
+  },
+
+  fallbackCopy(text, btn) {
+    prompt('Copy CBE Account Number:', text);
+    this.indicateCopied(btn);
+  },
+
+  showTrialUpgradeInfo() {
+    this.showView('suspended');
   },
 
   // HIERARCHICAL CONTENT TREE BUILDER & MANAGER
