@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CLN Questions — Practice. Improve. Get Ahead.</title>
-  <link rel="stylesheet" href="/css/style.css?v=1.2">
+  <link rel="stylesheet" href="/css/style.css?v=1.3">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎓</text></svg>">
 </head>
 <body>
@@ -488,7 +488,12 @@
           </div>
         </div>
 
+        <div id="results-unlock-banner-container" style="display:none; margin:20px 0;">
+          <!-- Dynamically populated unlock banner -->
+        </div>
+
         <div style="display:flex; gap:16px; justify-content:center; margin-bottom:32px; flex-wrap:wrap;">
+          <button id="btn-next-chapter-action" class="btn btn-success" style="display:none; background:#10b981; font-weight:800;" onclick="app.continueToNextChapter()">Continue to Next Chapter →</button>
           <button class="btn btn-primary" onclick="app.reviewAnswers()">Review Answers</button>
           <button class="btn btn-secondary" onclick="app.retryCurrentQuiz()">Try Again</button>
           <button class="btn btn-secondary" onclick="app.showCourseDetail(app.state.currentCourseId)">Back to Course</button>
@@ -666,7 +671,7 @@
             <div style="background:#fff; border:1px solid var(--border); border-radius:8px; padding:12px 14px; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
               <div>
                 <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600; text-transform:uppercase;">CBE Account Number</div>
-                <div id="cbe-account-number" style="font-size:1.25rem; font-weight:900; letter-spacing:1px; color:var(--navy); font-family:monospace; margin-top:2px;">1000253063512</div>
+                <div id="cbe-account-number" style="font-size:1.25rem; font-weight:900; letter-spacing:1px; color:var(--navy); font-family:monospace; margin-top:2px;">1000253063452</div>
               </div>
               <button id="btn-copy-cbe" class="btn btn-secondary btn-sm" onclick="app.copyCbeAccount(this)" style="display:flex; align-items:center; gap:6px; font-weight:700;">
                 <span>📋 Copy Account Number</span>
@@ -678,7 +683,7 @@
           <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:18px; margin-bottom:24px;">
             <div style="font-weight:700; color:var(--navy); font-size:0.95rem; margin-bottom:8px;">Easy 3-Step Activation:</div>
             <ol style="margin:0; padding-left:20px; font-size:0.9rem; color:var(--text-main); line-height:1.6;">
-              <li>Transfer <strong>380 Birr</strong> to CBE account <strong>1000253063512 (EYOB)</strong> via CBE Mobile Banking, Telebirr, or CBE branch.</li>
+              <li>Transfer <strong>380 Birr</strong> to CBE account <strong>1000253063452 (EYOB)</strong> via CBE Mobile Banking, Telebirr, or CBE branch.</li>
               <li>Take a <strong>screenshot or photo of your payment receipt / SMS confirmation</strong>.</li>
               <li>Send the receipt to Admin on Telegram: <a href="https://t.me/CLN_AAU_Admin" target="_blank" style="color:#229ED9; font-weight:700; text-decoration:none;">@CLN_AAU_Admin</a>. Your account will be activated immediately!</li>
             </ol>
@@ -1033,9 +1038,9 @@
   </aside>
 
   <!-- APPLICATION SCRIPTS -->
-  <script src="/js/api.js?v=1.2"></script>
-  <script src="/js/quiz.js?v=1.2"></script>
-  <script src="/js/arena.js?v=1.2"></script>
-  <script src="/js/app.js?v=1.2"></script>
+  <script src="/js/api.js?v=1.3"></script>
+  <script src="/js/quiz.js?v=1.3"></script>
+  <script src="/js/arena.js?v=1.3"></script>
+  <script src="/js/app.js?v=1.3"></script>
 </body>
 </html>

@@ -26,7 +26,11 @@ const quizEngine = {
       this.renderQuestion();
       this.renderNavGrid();
     } catch (err) {
-      alert('Failed to start quiz: ' + err.message);
+      if (err.message && err.message.toLowerCase().includes('locked')) {
+        alert('🔒 Quiz Locked\n\n' + err.message);
+      } else {
+        alert('Failed to start quiz: ' + err.message);
+      }
     }
   },
 

@@ -103,7 +103,7 @@ const PAYMENT_INFO = {
   originalPrice: 600,
   discount: '37% OFF',
   bankName: 'Commercial Bank of Ethiopia (CBE)',
-  accountNumber: '1000253063512',
+  accountNumber: '1000253063452',
   accountName: 'EYOB',
   telegramAdmin: '@CLN_AAU_Admin',
   telegramUrl: 'https://t.me/CLN_AAU_Admin'
@@ -130,7 +130,7 @@ async function verifyActiveUser(req, res, next) {
         suspended: true,
         trialExpired: false,
         error: 'Your account has been suspended.',
-        message: 'Your account is suspended. To activate your account, complete your payment of 380 Birr (discounted from 600 Birr) via CBE account 1000253063512 (EYOB) and send your receipt to @CLN_AAU_Admin on Telegram.',
+        message: 'Your account is suspended. To activate your account, complete your payment of 380 Birr (discounted from 600 Birr) via CBE account 1000253063452 (EYOB) and send your receipt to @CLN_AAU_Admin on Telegram.',
         supportContact: '@CLN_AAU_Admin',
         telegramUrl: 'https://t.me/CLN_AAU_Admin',
         paymentInfo: PAYMENT_INFO
@@ -156,7 +156,7 @@ async function verifyActiveUser(req, res, next) {
           suspended: true,
           trialExpired: true,
           error: 'Your 3-day free trial has expired.',
-          message: 'Your 72-hour free trial has ended. Please complete your payment of 380 Birr (discounted from 600 Birr) via CBE account 1000253063512 (EYOB) and send your receipt to @CLN_AAU_Admin on Telegram to reactivate your account.',
+          message: 'Your 72-hour free trial has ended. Please complete your payment of 380 Birr (discounted from 600 Birr) via CBE account 1000253063452 (EYOB) and send your receipt to @CLN_AAU_Admin on Telegram to reactivate your account.',
           supportContact: '@CLN_AAU_Admin',
           telegramUrl: 'https://t.me/CLN_AAU_Admin',
           paymentInfo: PAYMENT_INFO
@@ -312,7 +312,7 @@ app.post('/api/auth/login', async (req, res) => {
         suspended: true,
         trialExpired: isTrialExpired,
         error: isTrialExpired ? 'Your 3-day free trial has expired.' : 'Your account has been suspended.',
-        message: 'Please complete your payment of 380 Birr (discounted from 600 Birr) via CBE account 1000253063512 (EYOB) and send your receipt to @CLN_AAU_Admin on Telegram to reactivate your account.',
+        message: 'Please complete your payment of 380 Birr (discounted from 600 Birr) via CBE account 1000253063452 (EYOB) and send your receipt to @CLN_AAU_Admin on Telegram to reactivate your account.',
         supportContact: '@CLN_AAU_Admin',
         telegramUrl: 'https://t.me/CLN_AAU_Admin',
         paymentInfo: PAYMENT_INFO
@@ -372,7 +372,7 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
         suspended: true,
         trialExpired: isTrialExpired,
         error: isTrialExpired ? 'Your 3-day free trial has expired.' : 'Your account has been suspended.',
-        message: 'Please complete your payment of 380 Birr (discounted from 600 Birr) via CBE account 1000253063512 (EYOB) and send your receipt to @CLN_AAU_Admin on Telegram.',
+        message: 'Please complete your payment of 380 Birr (discounted from 600 Birr) via CBE account 1000253063452 (EYOB) and send your receipt to @CLN_AAU_Admin on Telegram.',
         supportContact: '@CLN_AAU_Admin',
         telegramUrl: 'https://t.me/CLN_AAU_Admin',
         paymentInfo: PAYMENT_INFO
@@ -424,7 +424,7 @@ app.get('/api/courses', async (req, res) => {
   }
 });
 
-app.get('/api/courses/:id', async (req, res) => {
+app.get('/api/courses/:id', optionalAuthenticateToken, async (req, res) => {
   try {
     if (req.params.id === 'c_arena' || req.params.id.startsWith('c_arena')) {
       return res.status(404).json({ error: 'Course not found.' });
@@ -433,7 +433,7 @@ app.get('/api/courses/:id', async (req, res) => {
     const course = await db.prepare("SELECT * FROM courses WHERE id = ? AND status = 'ACTIVE'").get(req.params.id);
     if (!course) return res.status(404).json({ error: 'Course not found.' });
 
-    const chapters = await db.prepare(`
+    const rawChapters = await db.prepare(`
       SELECT ch.*, COUNT(q.id) AS quiz_count
       FROM chapters ch
       LEFT JOIN quizzes q ON ch.id = q.chapter_id AND q.status = 'ACTIVE' AND q.id NOT LIKE 'quiz_arena_%'
@@ -442,13 +442,83 @@ app.get('/api/courses/:id', async (req, res) => {
       ORDER BY ch.chapter_order ASC
     `).all(req.params.id);
 
+    const isAdmin = req.user && (req.user.email === 'admin@cln.edu.et' || req.user.email === 'eyoba7619@gmail.com');
+
+    // Collect completion records for student in this course
+    let completedChapterMap = new Map();
+    if (req.user && req.user.id) {
+      const completedAttempts = await db.prepare(`
+        SELECT q.chapter_id, qa.score, qa.percentage
+        FROM quiz_attempts qa
+        JOIN quizzes q ON qa.quiz_id = q.id
+        JOIN chapters ch ON q.chapter_id = ch.id
+        WHERE qa.user_id = ? AND ch.course_id = ? AND qa.completed_at IS NOT NULL
+        ORDER BY qa.completed_at ASC
+      `).all(req.user.id, course.id);
+
+      for (const a of completedAttempts) {
+        if (!completedChapterMap.has(a.chapter_id)) {
+          completedChapterMap.set(a.chapter_id, {
+            attemptsCount: 0,
+            bestScore: 0,
+            latestScore: 0
+          });
+        }
+        const entry = completedChapterMap.get(a.chapter_id);
+        entry.attemptsCount++;
+        if (a.percentage > entry.bestScore) entry.bestScore = a.percentage;
+        entry.latestScore = a.percentage;
+      }
+    }
+
+    // Determine sequential progressive unlock
+    let previousChapterCompleted = true; // Chapter 1 is always unlocked
+    const chapters = rawChapters.map((ch, index) => {
+      const stats = completedChapterMap.get(ch.id);
+      const isCompleted = Boolean(stats);
+      const bestScore = stats ? stats.bestScore : null;
+      const latestScore = stats ? stats.latestScore : null;
+      const attemptsCount = stats ? stats.attemptsCount : 0;
+
+      let isUnlocked = false;
+      let lockedReason = null;
+
+      if (isAdmin) {
+        isUnlocked = true;
+      } else if (index === 0) {
+        // First chapter is always unlocked
+        isUnlocked = true;
+      } else if (previousChapterCompleted) {
+        // Unlocked because previous chapter has been completed
+        isUnlocked = true;
+      } else {
+        const prevChapter = rawChapters[index - 1];
+        const prevName = prevChapter ? prevChapter.name : `Chapter ${index}`;
+        isUnlocked = false;
+        lockedReason = `Complete ${prevName} Quiz to unlock ${ch.name} Quiz.`;
+      }
+
+      // Next chapter unlock depends strictly on whether this chapter is completed (score is irrelevant!)
+      previousChapterCompleted = isCompleted;
+
+      return {
+        ...ch,
+        is_completed: isCompleted,
+        best_score: bestScore,
+        latest_score: latestScore,
+        attempts_count: attemptsCount,
+        is_unlocked: isUnlocked,
+        locked_reason: lockedReason
+      };
+    });
+
     res.json({ course, chapters });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to load course details.' });
+    res.status(500).json({ error: 'Failed to load course details: ' + err.message });
   }
 });
 
-app.get('/api/chapters/:id', async (req, res) => {
+app.get('/api/chapters/:id', optionalAuthenticateToken, async (req, res) => {
   try {
     if (req.params.id === 'ch_arena' || req.params.id.startsWith('ch_arena')) {
       return res.status(404).json({ error: 'Chapter not found.' });
@@ -457,11 +527,109 @@ app.get('/api/chapters/:id', async (req, res) => {
     const chapter = await db.prepare("SELECT * FROM chapters WHERE id = ? AND status = 'ACTIVE'").get(req.params.id);
     if (!chapter) return res.status(404).json({ error: 'Chapter not found.' });
 
-    const quizzes = await db.prepare("SELECT * FROM quizzes WHERE chapter_id = ? AND status = 'ACTIVE' AND id NOT LIKE 'quiz_arena_%' ORDER BY created_at ASC").all(req.params.id);
+    const course = await db.prepare("SELECT * FROM courses WHERE id = ?").get(chapter.course_id);
 
-    res.json({ chapter, quizzes });
+    const isAdmin = req.user && (req.user.email === 'admin@cln.edu.et' || req.user.email === 'eyoba7619@gmail.com');
+
+    // Check if this chapter itself is unlocked
+    let isChapterUnlocked = false;
+    let chapterLockedReason = null;
+
+    if (isAdmin || chapter.chapter_order <= 1) {
+      isChapterUnlocked = true;
+    } else {
+      // Find previous chapter in same course
+      const prevChapter = await db.prepare(`
+        SELECT * FROM chapters
+        WHERE course_id = ? AND chapter_order < ? AND status = 'ACTIVE' AND id != 'ch_arena'
+        ORDER BY chapter_order DESC
+        LIMIT 1
+      `).get(chapter.course_id, chapter.chapter_order);
+
+      if (!prevChapter) {
+        isChapterUnlocked = true;
+      } else if (!req.user) {
+        isChapterUnlocked = false;
+        chapterLockedReason = `Complete ${prevChapter.name} Quiz to unlock ${chapter.name} Quiz.`;
+      } else {
+        const prevAttempt = await db.prepare(`
+          SELECT qa.id FROM quiz_attempts qa
+          JOIN quizzes q ON qa.quiz_id = q.id
+          WHERE q.chapter_id = ? AND qa.user_id = ? AND qa.completed_at IS NOT NULL
+          LIMIT 1
+        `).get(prevChapter.id, req.user.id);
+
+        if (prevAttempt) {
+          isChapterUnlocked = true;
+        } else {
+          isChapterUnlocked = false;
+          chapterLockedReason = `Complete ${prevChapter.name} Quiz to unlock ${chapter.name} Quiz.`;
+        }
+      }
+    }
+
+    const rawQuizzes = await db.prepare("SELECT * FROM quizzes WHERE chapter_id = ? AND status = 'ACTIVE' AND id NOT LIKE 'quiz_arena_%' ORDER BY created_at ASC").all(req.params.id);
+
+    const quizzes = [];
+    let previousQuizCompleted = true; // Within a chapter, first quiz is unlocked if chapter is unlocked
+
+    for (let i = 0; i < rawQuizzes.length; i++) {
+      const q = rawQuizzes[i];
+      let quizAttempts = [];
+      if (req.user && req.user.id) {
+        quizAttempts = await db.prepare(`
+          SELECT score, percentage, completed_at
+          FROM quiz_attempts
+          WHERE user_id = ? AND quiz_id = ? AND completed_at IS NOT NULL
+          ORDER BY completed_at DESC
+        `).all(req.user.id, q.id);
+      }
+
+      const isCompleted = quizAttempts.length > 0;
+      const bestScore = isCompleted ? Math.max(...quizAttempts.map(a => a.percentage)) : null;
+      const latestScore = isCompleted ? quizAttempts[0].percentage : null;
+      const attemptsCount = quizAttempts.length;
+
+      let isUnlocked = false;
+      let lockedReason = null;
+
+      if (isAdmin) {
+        isUnlocked = true;
+      } else if (!isChapterUnlocked) {
+        isUnlocked = false;
+        lockedReason = chapterLockedReason;
+      } else if (i === 0 || previousQuizCompleted) {
+        isUnlocked = true;
+      } else {
+        const prevQuiz = rawQuizzes[i - 1];
+        isUnlocked = false;
+        lockedReason = `Complete ${prevQuiz.title} to unlock ${q.title}.`;
+      }
+
+      previousQuizCompleted = isCompleted;
+
+      quizzes.push({
+        ...q,
+        is_completed: isCompleted,
+        best_score: bestScore,
+        latest_score: latestScore,
+        attempts_count: attemptsCount,
+        is_unlocked: isUnlocked,
+        locked_reason: lockedReason
+      });
+    }
+
+    res.json({
+      chapter: {
+        ...chapter,
+        is_unlocked: isChapterUnlocked,
+        locked_reason: chapterLockedReason
+      },
+      quizzes,
+      course
+    });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to load chapter details.' });
+    res.status(500).json({ error: 'Failed to load chapter details: ' + err.message });
   }
 });
 
@@ -475,7 +643,39 @@ app.get('/api/quizzes/:id/start', authenticateToken, verifyActiveUser, async (re
     if (!quiz) return res.status(404).json({ error: 'Quiz not found or inactive.' });
 
     const chapter = await db.prepare('SELECT * FROM chapters WHERE id = ?').get(quiz.chapter_id);
+    if (!chapter) return res.status(404).json({ error: 'Chapter not found.' });
+
     const course = await db.prepare('SELECT * FROM courses WHERE id = ?').get(chapter.course_id);
+
+    const isAdmin = req.user.email === 'admin@cln.edu.et' || req.user.email === 'eyoba7619@gmail.com';
+
+    // Authoritative Progressive Unlock Check:
+    // If chapter > 1, the student MUST have completed at least one quiz in the previous chapter
+    if (!isAdmin && chapter.chapter_order > 1) {
+      const prevChapter = await db.prepare(`
+        SELECT * FROM chapters
+        WHERE course_id = ? AND chapter_order < ? AND status = 'ACTIVE' AND id != 'ch_arena'
+        ORDER BY chapter_order DESC
+        LIMIT 1
+      `).get(chapter.course_id, chapter.chapter_order);
+
+      if (prevChapter) {
+        const prevAttempt = await db.prepare(`
+          SELECT qa.id FROM quiz_attempts qa
+          JOIN quizzes q ON qa.quiz_id = q.id
+          WHERE q.chapter_id = ? AND qa.user_id = ? AND qa.completed_at IS NOT NULL
+          LIMIT 1
+        `).get(prevChapter.id, req.user.id);
+
+        if (!prevAttempt) {
+          return res.status(403).json({
+            locked: true,
+            error: 'Quiz Locked',
+            message: `Complete ${prevChapter.name} Quiz to unlock ${chapter.name} Quiz.`
+          });
+        }
+      }
+    }
 
     const rawQuestions = await db.prepare(`
       SELECT id, quiz_id, question_text, image_url, option_a, option_b, option_c, option_d, difficulty
@@ -602,6 +802,39 @@ app.post('/api/quizzes/:id/submit', authenticateToken, verifyActiveUser, async (
 
     const updatedUser = await db.prepare('SELECT total_xp FROM users WHERE id = ?').get(req.user.id);
 
+    // Progressive Unlock: Determine next chapter unlocked in this course
+    let unlockedNextChapter = null;
+    try {
+      const currentChapter = await db.prepare('SELECT * FROM chapters WHERE id = ?').get(quiz.chapter_id);
+      if (currentChapter) {
+        const nextChapter = await db.prepare(`
+          SELECT * FROM chapters
+          WHERE course_id = ? AND chapter_order > ? AND status = 'ACTIVE' AND id != 'ch_arena'
+          ORDER BY chapter_order ASC
+          LIMIT 1
+        `).get(currentChapter.course_id, currentChapter.chapter_order);
+
+        if (nextChapter) {
+          const nextQuiz = await db.prepare(`
+            SELECT id, title FROM quizzes
+            WHERE chapter_id = ? AND status = 'ACTIVE' AND id NOT LIKE 'quiz_arena_%'
+            ORDER BY created_at ASC
+            LIMIT 1
+          `).get(nextChapter.id);
+
+          unlockedNextChapter = {
+            chapterId: nextChapter.id,
+            chapterName: nextChapter.name,
+            chapterOrder: nextChapter.chapter_order,
+            quizId: nextQuiz ? nextQuiz.id : null,
+            quizTitle: nextQuiz ? nextQuiz.title : null
+          };
+        }
+      }
+    } catch (e) {
+      console.error('Failed to compute unlockedNextChapter:', e);
+    }
+
     res.json({
       attemptId,
       score: correctCount,
@@ -609,7 +842,8 @@ app.post('/api/quizzes/:id/submit', authenticateToken, verifyActiveUser, async (
       percentage,
       xpEarned,
       newTotalXp: updatedUser.total_xp,
-      review: reviewDetails
+      review: reviewDetails,
+      unlockedNextChapter
     });
   } catch (err) {
     res.status(500).json({ error: 'Quiz submission failed: ' + err.message });

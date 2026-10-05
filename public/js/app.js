@@ -275,15 +275,15 @@ const app = {
     try {
       const data = await API.getCourseDetails(courseId);
       const c = data.course;
-      const chapters = data.chapters;
+      const chapters = data.chapters || [];
 
       const headerEl = document.getElementById('course-header-card');
       headerEl.innerHTML = `
-        <img src="${c.image_url || ''}" style="width:120px; height:120px; object-fit:cover; border-radius:12px;" alt="${c.name}">
+        <img src="${c.image_url || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500'}" style="width:120px; height:120px; object-fit:cover; border-radius:12px;" alt="${this.escapeHtml(c.name)}">
         <div style="flex:1;">
           <span class="brand-badge">FRESHMAN COURSE</span>
-          <h2 style="font-size:1.8rem; font-weight:800; margin:6px 0;">${c.name}</h2>
-          <p style="opacity:0.9; font-size:0.95rem;">${c.description}</p>
+          <h2 style="font-size:1.8rem; font-weight:800; margin:6px 0;">${this.escapeHtml(c.name)}</h2>
+          <p style="opacity:0.9; font-size:0.95rem;">${this.escapeHtml(c.description)}</p>
         </div>
       `;
 
@@ -296,16 +296,57 @@ const app = {
           </div>
         `;
       } else {
-        gridEl.innerHTML = chapters.map(ch => `
-          <div class="card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; margin-bottom:0;">
-            ${ch.image_url ? `<img src="${ch.image_url}" style="width:68px; height:68px; object-fit:cover; border-radius:8px; border:1px solid var(--border);" alt="${ch.name}">` : ''}
-            <div style="flex:1; min-width:200px;">
-              <h4 style="font-size:1.1rem; font-weight:700; color:var(--navy);">${ch.name}</h4>
-              <p style="color:var(--text-muted); font-size:0.88rem; margin-top:4px;">${ch.description}</p>
+        gridEl.innerHTML = chapters.map(ch => {
+          let statusBadge = '';
+          let lockNotice = '';
+          let actionBtn = '';
+
+          if (ch.is_completed) {
+            statusBadge = `
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:6px;">
+                <span class="status-badge status-paid" style="font-size:0.75rem;">✅ Completed</span>
+                <span style="font-weight:700; color:var(--navy); font-size:0.85rem;">Score: ${ch.best_score}%</span>
+                ${ch.attempts_count > 1 ? `<span style="font-size:0.75rem; color:var(--text-muted);">(${ch.attempts_count} attempts)</span>` : ''}
+              </div>
+            `;
+            actionBtn = `<button class="btn btn-primary btn-sm" onclick="app.showChapterDetail('${ch.id}')">Practice Again ↺</button>`;
+          } else if (ch.is_unlocked) {
+            statusBadge = `
+              <div style="display:flex; align-items:center; gap:8px; margin-top:6px;">
+                <span class="status-badge status-trial" style="font-size:0.75rem;">🔓 Quiz Available</span>
+              </div>
+            `;
+            actionBtn = `<button class="btn btn-success btn-sm" style="background:#16a34a; font-weight:700;" onclick="app.showChapterDetail('${ch.id}')">Start Quiz 🚀</button>`;
+          } else {
+            statusBadge = `
+              <div style="display:flex; align-items:center; gap:8px; margin-top:6px;">
+                <span class="status-badge" style="background:#f1f5f9; color:#64748b; border:1px solid #cbd5e1; font-size:0.75rem;">🔒 Locked</span>
+              </div>
+            `;
+            lockNotice = `
+              <div style="color:#64748b; font-size:0.82rem; margin-top:6px; font-weight:600; display:flex; align-items:center; gap:5px;">
+                <span>🔒</span> <span>${this.escapeHtml(ch.locked_reason || 'Complete previous chapter quiz to unlock.')}</span>
+              </div>
+            `;
+            actionBtn = `<button class="btn btn-secondary btn-sm" style="opacity:0.6; cursor:not-allowed;" onclick="app.showLockedAlert('${this.escapeHtml(ch.locked_reason || 'Complete previous chapter quiz to unlock this chapter.')}')">🔒 Locked</button>`;
+          }
+
+          return `
+            <div class="card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; margin-bottom:0; ${!ch.is_unlocked ? 'opacity:0.85; background:#f8fafc;' : ''}">
+              ${ch.image_url ? `<img src="${ch.image_url}" style="width:68px; height:68px; object-fit:cover; border-radius:8px; border:1px solid var(--border);" alt="${this.escapeHtml(ch.name)}">` : ''}
+              <div style="flex:1; min-width:200px;">
+                <span class="brand-badge" style="font-size:0.72rem; padding:2px 6px;">CHAPTER ${ch.chapter_order}</span>
+                <h4 style="font-size:1.1rem; font-weight:700; color:var(--navy); margin-top:4px;">${this.escapeHtml(ch.name)}</h4>
+                <p style="color:var(--text-muted); font-size:0.85rem; margin-top:2px;">${this.escapeHtml(ch.description || '')}</p>
+                ${statusBadge}
+                ${lockNotice}
+              </div>
+              <div>
+                ${actionBtn}
+              </div>
             </div>
-            <button class="btn btn-primary" onclick="app.showChapterDetail('${ch.id}')">Explore Quizzes →</button>
-          </div>
-        `).join('');
+          `;
+        }).join('');
       }
 
       this.showView('course-detail');
@@ -319,37 +360,78 @@ const app = {
     try {
       const data = await API.getChapterDetails(chapterId);
       const ch = data.chapter;
-      const quizzes = data.quizzes;
+      const quizzes = data.quizzes || [];
 
       const container = document.getElementById('chapter-detail-content');
       container.innerHTML = `
         <div class="card" style="margin-bottom:24px; display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
-          ${ch.image_url ? `<img src="${ch.image_url}" style="width:80px; height:80px; object-fit:cover; border-radius:10px; border:1px solid var(--border);" alt="${ch.name}">` : ''}
+          ${ch.image_url ? `<img src="${ch.image_url}" style="width:80px; height:80px; object-fit:cover; border-radius:10px; border:1px solid var(--border);" alt="${this.escapeHtml(ch.name)}">` : ''}
           <div style="flex:1; min-width:220px;">
-            <h2 style="font-size:1.5rem; font-weight:800; color:var(--navy);">${ch.name}</h2>
-            <p style="color:var(--text-muted); margin-top:6px;">${ch.description}</p>
+            <span class="brand-badge" style="font-size:0.72rem; padding:2px 6px;">CHAPTER ${ch.chapter_order}</span>
+            <h2 style="font-size:1.5rem; font-weight:800; color:var(--navy); margin-top:4px;">${this.escapeHtml(ch.name)}</h2>
+            <p style="color:var(--text-muted); margin-top:6px;">${this.escapeHtml(ch.description || '')}</p>
+            ${!ch.is_unlocked ? `
+              <div style="margin-top:10px; padding:10px 14px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; color:#b91c1c; font-size:0.88rem; font-weight:600; display:flex; align-items:center; gap:8px;">
+                <span>🔒</span>
+                <span>${this.escapeHtml(ch.locked_reason || 'Complete previous chapter quiz to unlock.')}</span>
+              </div>
+            ` : ''}
           </div>
         </div>
 
-        <h3 style="font-size:1.2rem; font-weight:700; color:var(--navy); margin-bottom:16px;">Available Chapter Quizzes</h3>
+        <h3 style="font-size:1.2rem; font-weight:700; color:var(--navy); margin-bottom:16px;">Chapter Quizzes</h3>
         ${!quizzes || quizzes.length === 0 ? `
           <div class="card" style="text-align:center; padding:32px 16px;">
             <p style="color:var(--text-muted); font-size:1rem; margin-bottom:16px;">No quizzes have been published for this chapter yet.</p>
             <button class="btn btn-secondary" onclick="app.showCourseDetail('${ch.course_id}')">← Back to Course</button>
           </div>
-        ` : quizzes.map(q => `
-          <div class="card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
-            <div style="flex:1; min-width:220px;">
-              <h4 style="font-size:1.15rem; font-weight:700; color:var(--navy);">${q.title}</h4>
-              <div style="font-size:0.88rem; color:var(--text-muted); margin-top:6px; display:flex; flex-wrap:wrap; gap:8px;">
-                <span>⏱️ ${q.time_limit} Min</span> • 
-                <span>❓ ${q.question_count} Questions</span> • 
-                <span class="brand-badge" style="font-size:0.75rem; padding:2px 6px;">${q.difficulty}</span>
+        ` : quizzes.map(q => {
+          let quizBadge = '';
+          let quizAction = '';
+          let quizNotice = '';
+
+          if (q.is_completed) {
+            quizBadge = `<span class="status-badge status-paid" style="font-size:0.78rem;">✅ Completed</span>`;
+            quizAction = `<button class="btn btn-primary" onclick="app.startChapterQuiz('${q.id}')">Retake Quiz ↺</button>`;
+          } else if (q.is_unlocked) {
+            quizBadge = `<span class="status-badge status-trial" style="font-size:0.78rem;">🔓 Quiz Available</span>`;
+            quizAction = `<button class="btn btn-success btn-lg" style="background:#16a34a; font-weight:700;" onclick="app.startChapterQuiz('${q.id}')">Take Quiz 🚀</button>`;
+          } else {
+            quizBadge = `<span class="status-badge" style="background:#f1f5f9; color:#64748b; border:1px solid #cbd5e1; font-size:0.78rem;">🔒 Locked</span>`;
+            quizNotice = `
+              <div style="color:#64748b; font-size:0.85rem; font-weight:600; margin-top:8px;">
+                🔒 ${this.escapeHtml(q.locked_reason || 'Complete previous chapter quiz to unlock.')}
+              </div>
+            `;
+            quizAction = `<button class="btn btn-secondary btn-lg" style="opacity:0.6; cursor:not-allowed;" onclick="app.showLockedAlert('${this.escapeHtml(q.locked_reason || 'Complete previous chapter quiz to unlock this quiz.')}')">🔒 Locked</button>`;
+          }
+
+          return `
+            <div class="card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; margin-bottom:16px; ${!q.is_unlocked ? 'opacity:0.85; background:#f8fafc;' : ''}">
+              <div style="flex:1; min-width:220px;">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                  <h4 style="font-size:1.15rem; font-weight:700; color:var(--navy); margin:0;">${this.escapeHtml(q.title)}</h4>
+                  ${quizBadge}
+                </div>
+                ${q.is_completed ? `
+                  <div style="font-size:0.95rem; font-weight:800; color:var(--navy); margin-top:4px;">
+                    Score: ${q.best_score}%
+                    <span style="font-size:0.78rem; font-weight:400; color:var(--text-muted); margin-left:6px;">(Best of ${q.attempts_count} attempt${q.attempts_count > 1 ? 's' : ''})</span>
+                  </div>
+                ` : ''}
+                <div style="font-size:0.88rem; color:var(--text-muted); margin-top:6px; display:flex; flex-wrap:wrap; gap:8px;">
+                  <span>⏱️ ${q.time_limit} Min</span> • 
+                  <span>❓ ${q.question_count} Questions</span> • 
+                  <span class="brand-badge" style="font-size:0.75rem; padding:2px 6px;">${q.difficulty}</span>
+                </div>
+                ${quizNotice}
+              </div>
+              <div>
+                ${quizAction}
               </div>
             </div>
-            <button class="btn btn-success btn-lg" onclick="app.startChapterQuiz('${q.id}')">Take Quiz 🚀</button>
-          </div>
-        `).join('')}
+          `;
+        }).join('')}
       `;
 
       this.showView('chapter-detail');
@@ -367,6 +449,10 @@ const app = {
     quizEngine.start(quizId);
   },
 
+  showLockedAlert(msg) {
+    alert('🔒 Quiz Locked\n\n' + (msg || 'Please complete the previous chapter quiz to unlock this quiz.'));
+  },
+
   // RESULTS & REVIEW
   showQuizResults(results) {
     this.state.lastQuizResults = results;
@@ -381,8 +467,50 @@ const app = {
       this.renderNavUserArea();
     }
 
+    // Celebratory progressive unlock banner
+    const unlockContainer = document.getElementById('results-unlock-banner-container');
+    const continueBtn = document.getElementById('btn-next-chapter-action');
+
+    if (results.unlockedNextChapter) {
+      const nextCh = results.unlockedNextChapter;
+      this.state.nextUnlockedChapter = nextCh;
+
+      if (unlockContainer) {
+        unlockContainer.innerHTML = `
+          <div class="card" style="background:linear-gradient(135deg, #10b981, #059669); color:#fff; border-radius:14px; padding:22px; text-align:center; box-shadow:0 6px 18px rgba(16,185,129,0.35);">
+            <div style="font-size:2.2rem; margin-bottom:6px;">🎉 🔓</div>
+            <h3 style="font-size:1.3rem; font-weight:800; margin-bottom:6px; color:#fff;">Next Chapter Unlocked!</h3>
+            <p style="font-size:0.95rem; opacity:0.95; margin-bottom:14px; max-width:480px; margin-left:auto; margin-right:auto;">
+              You completed this chapter quiz! <strong>${this.escapeHtml(nextCh.chapterName)}</strong> is now unlocked and available for you to practice.
+            </p>
+            <button class="btn" style="background:#fff; color:#065f46; font-weight:800; padding:10px 24px; border-radius:8px; border:none; box-shadow:0 2px 8px rgba(0,0,0,0.15);" onclick="app.continueToNextChapter()">
+              Continue to Next Chapter →
+            </button>
+          </div>
+        `;
+        unlockContainer.style.display = 'block';
+      }
+
+      if (continueBtn) {
+        continueBtn.style.display = 'inline-block';
+      }
+    } else {
+      if (unlockContainer) unlockContainer.style.display = 'none';
+      if (continueBtn) continueBtn.style.display = 'none';
+    }
+
     document.getElementById('review-answers-container').style.display = 'none';
     this.showView('results');
+  },
+
+  continueToNextChapter() {
+    if (this.state.nextUnlockedChapter && this.state.nextUnlockedChapter.chapterId) {
+      this.showChapterDetail(this.state.nextUnlockedChapter.chapterId);
+    } else if (this.state.currentCourseId) {
+      this.showCourseDetail(this.state.currentCourseId);
+    } else {
+      this.showView('courses');
+    }
   },
 
   retryCurrentQuiz() {
@@ -1224,7 +1352,7 @@ const app = {
   },
 
   copyCbeAccount(btn) {
-    const acc = '1000253063512';
+    const acc = '1000253063452';
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(acc).then(() => {
         this.indicateCopied(btn);
@@ -1239,7 +1367,7 @@ const app = {
   indicateCopied(btn) {
     if (!btn) return;
     const orig = btn.innerHTML;
-    btn.innerHTML = '<span>✅ Copied (1000253063512)!</span>';
+    btn.innerHTML = '<span>✅ Copied (1000253063452)!</span>';
     btn.style.background = '#16a34a';
     btn.style.color = '#fff';
     setTimeout(() => {
