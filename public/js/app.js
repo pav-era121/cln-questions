@@ -1355,19 +1355,32 @@ const app = {
     const acc = '1000253063452';
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(acc).then(() => {
-        this.indicateCopied(btn);
+        this.indicateCopied(btn, '1000253063452');
       }).catch(() => {
-        this.fallbackCopy(acc, btn);
+        this.fallbackCopy(acc, btn, 'CBE Account Number');
       });
     } else {
-      this.fallbackCopy(acc, btn);
+      this.fallbackCopy(acc, btn, 'CBE Account Number');
     }
   },
 
-  indicateCopied(btn) {
+  copyTelebirr(btn) {
+    const phone = '0950113361';
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(phone).then(() => {
+        this.indicateCopied(btn, '0950113361');
+      }).catch(() => {
+        this.fallbackCopy(phone, btn, 'Telebirr Phone Number');
+      });
+    } else {
+      this.fallbackCopy(phone, btn, 'Telebirr Phone Number');
+    }
+  },
+
+  indicateCopied(btn, label) {
     if (!btn) return;
     const orig = btn.innerHTML;
-    btn.innerHTML = '<span>✅ Copied (1000253063452)!</span>';
+    btn.innerHTML = `<span>✅ Copied (${label || 'Copied'})!</span>`;
     btn.style.background = '#16a34a';
     btn.style.color = '#fff';
     setTimeout(() => {
@@ -1377,9 +1390,9 @@ const app = {
     }, 2500);
   },
 
-  fallbackCopy(text, btn) {
-    prompt('Copy CBE Account Number:', text);
-    this.indicateCopied(btn);
+  fallbackCopy(text, btn, label) {
+    prompt(`Copy ${label || 'Account Number'}:`, text);
+    this.indicateCopied(btn, text);
   },
 
   showTrialUpgradeInfo() {

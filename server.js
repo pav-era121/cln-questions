@@ -102,9 +102,19 @@ const PAYMENT_INFO = {
   amount: 380,
   originalPrice: 600,
   discount: '37% OFF',
+  cbe: {
+    bankName: 'Commercial Bank of Ethiopia (CBE)',
+    accountNumber: '1000253063452',
+    accountName: 'EYOB'
+  },
+  telebirr: {
+    serviceName: 'Telebirr',
+    phoneNumber: '0950113361'
+  },
   bankName: 'Commercial Bank of Ethiopia (CBE)',
   accountNumber: '1000253063452',
   accountName: 'EYOB',
+  telebirrPhone: '0950113361',
   telegramAdmin: '@CLN_AAU_Admin',
   telegramUrl: 'https://t.me/CLN_AAU_Admin'
 };
@@ -130,7 +140,7 @@ async function verifyActiveUser(req, res, next) {
         suspended: true,
         trialExpired: false,
         error: 'Your account has been suspended.',
-        message: 'Your account is suspended. To activate your account, complete your payment of 380 Birr (discounted from 600 Birr) via CBE account 1000253063452 (EYOB) and send your receipt to @CLN_AAU_Admin on Telegram.',
+        message: 'Your account is suspended. To activate your account, complete your payment of 380 Birr (discounted from 600 Birr) via CBE account 1000253063452 (EYOB) or Telebirr (0950113361) and send your receipt to @CLN_AAU_Admin on Telegram.',
         supportContact: '@CLN_AAU_Admin',
         telegramUrl: 'https://t.me/CLN_AAU_Admin',
         paymentInfo: PAYMENT_INFO
@@ -156,7 +166,7 @@ async function verifyActiveUser(req, res, next) {
           suspended: true,
           trialExpired: true,
           error: 'Your 3-day free trial has expired.',
-          message: 'Your 72-hour free trial has ended. Please complete your payment of 380 Birr (discounted from 600 Birr) via CBE account 1000253063452 (EYOB) and send your receipt to @CLN_AAU_Admin on Telegram to reactivate your account.',
+          message: 'Your 72-hour free trial has ended. Please complete your payment of 380 Birr (discounted from 600 Birr) via CBE account 1000253063452 (EYOB) or Telebirr (0950113361) and send your receipt to @CLN_AAU_Admin on Telegram to reactivate your account.',
           supportContact: '@CLN_AAU_Admin',
           telegramUrl: 'https://t.me/CLN_AAU_Admin',
           paymentInfo: PAYMENT_INFO
@@ -312,7 +322,7 @@ app.post('/api/auth/login', async (req, res) => {
         suspended: true,
         trialExpired: isTrialExpired,
         error: isTrialExpired ? 'Your 3-day free trial has expired.' : 'Your account has been suspended.',
-        message: 'Please complete your payment of 380 Birr (discounted from 600 Birr) via CBE account 1000253063452 (EYOB) and send your receipt to @CLN_AAU_Admin on Telegram to reactivate your account.',
+        message: 'Please complete your payment of 380 Birr (discounted from 600 Birr) via CBE account 1000253063452 (EYOB) or Telebirr (0950113361) and send your receipt to @CLN_AAU_Admin on Telegram to reactivate your account.',
         supportContact: '@CLN_AAU_Admin',
         telegramUrl: 'https://t.me/CLN_AAU_Admin',
         paymentInfo: PAYMENT_INFO
@@ -372,7 +382,7 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
         suspended: true,
         trialExpired: isTrialExpired,
         error: isTrialExpired ? 'Your 3-day free trial has expired.' : 'Your account has been suspended.',
-        message: 'Please complete your payment of 380 Birr (discounted from 600 Birr) via CBE account 1000253063452 (EYOB) and send your receipt to @CLN_AAU_Admin on Telegram.',
+        message: 'Please complete your payment of 380 Birr (discounted from 600 Birr) via CBE account 1000253063452 (EYOB) or Telebirr (0950113361) and send your receipt to @CLN_AAU_Admin on Telegram.',
         supportContact: '@CLN_AAU_Admin',
         telegramUrl: 'https://t.me/CLN_AAU_Admin',
         paymentInfo: PAYMENT_INFO
