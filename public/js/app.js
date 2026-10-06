@@ -22,6 +22,13 @@ const app = {
 
   setupEventListeners() {
     window.addEventListener('cln:user-suspended', (e) => {
+      if (this.state.user) {
+        if (e.detail && e.detail.trialExpired) {
+          this.state.user.hoursLeft = 0;
+        } else {
+          this.state.user.status = 'SUSPENDED';
+        }
+      }
       this.showView('suspended');
     });
 
@@ -156,6 +163,8 @@ const app = {
       this.loadStudentHistory();
     } else if (viewName === 'admin') {
       this.loadAdminPanel();
+    } else if (viewName === 'suspended') {
+      this.renderSuspendedView();
     }
 
     window.scrollTo(0, 0);
@@ -333,7 +342,7 @@ const app = {
           } else if (ch.is_unlocked) {
             statusBadge = `
               <div style="display:flex; align-items:center; gap:8px; margin-top:6px;">
-                <span class="status-badge status-trial" style="font-size:0.75rem;">🔓 Quiz Available</span>
+                <span class="status-badge status-paid" style="font-size:0.75rem;">🟢 Quiz Available</span>
               </div>
             `;
             actionBtn = `<button class="btn btn-success btn-sm" style="background:#16a34a; font-weight:700;" onclick="app.showChapterDetail('${ch.id}')">Start Quiz 🚀</button>`;
@@ -414,7 +423,7 @@ const app = {
             quizBadge = `<span class="status-badge status-paid" style="font-size:0.78rem;">✅ Completed</span>`;
             quizAction = `<button class="btn btn-primary" onclick="app.startChapterQuiz('${q.id}')">Retake Quiz ↺</button>`;
           } else if (q.is_unlocked) {
-            quizBadge = `<span class="status-badge status-trial" style="font-size:0.78rem;">🔓 Quiz Available</span>`;
+            quizBadge = `<span class="status-badge status-paid" style="font-size:0.78rem;">🟢 Quiz Available</span>`;
             quizAction = `<button class="btn btn-success btn-lg" style="background:#16a34a; font-weight:700;" onclick="app.startChapterQuiz('${q.id}')">Take Quiz 🚀</button>`;
           } else {
             quizBadge = `<span class="status-badge" style="background:#f1f5f9; color:#64748b; border:1px solid #cbd5e1; font-size:0.78rem;">🔒 Locked</span>`;
@@ -498,7 +507,7 @@ const app = {
       if (unlockContainer) {
         unlockContainer.innerHTML = `
           <div class="card" style="background:linear-gradient(135deg, #10b981, #059669); color:#fff; border-radius:14px; padding:22px; text-align:center; box-shadow:0 6px 18px rgba(16,185,129,0.35);">
-            <div style="font-size:2.2rem; margin-bottom:6px;">🎉 🔓</div>
+            <div style="font-size:2.2rem; margin-bottom:6px;">🎉 🚀</div>
             <h3 style="font-size:1.3rem; font-weight:800; margin-bottom:6px; color:#fff;">Next Chapter Unlocked!</h3>
             <p style="font-size:0.95rem; opacity:0.95; margin-bottom:14px; max-width:480px; margin-left:auto; margin-right:auto;">
               You completed this chapter quiz! <strong>${this.escapeHtml(nextCh.chapterName)}</strong> is now unlocked and available for you to practice.
@@ -1417,6 +1426,53 @@ const app = {
 
   showTrialUpgradeInfo() {
     this.showView('suspended');
+  },
+
+  renderSuspendedView() {
+    const titleEl = document.getElementById('suspended-title');
+    const subEl = document.getElementById('suspended-subtitle');
+    const iconEl = document.getElementById('suspended-icon');
+    const backBtn = document.getElementById('btn-back-to-courses');
+    const user = this.state.user;
+
+    const isSuspended = user && user.status === 'SUSPENDED';
+    const hasActiveTrial = user && !user.isPaid && !isSuspended && (user.hoursLeft > 0 || user.isTrial);
+
+    if (hasActiveTrial) {
+      const hours = user.hoursLeft || 0;
+      if (iconEl) iconEl.innerText = '⏳';
+      if (titleEl) {
+        titleEl.innerHTML = `Active 3-Day Free Trial <span style="display:block; font-size:1.25rem; color:#16a34a; margin-top:6px; font-weight:700;">(${hours} Hours Remaining)</span>`;
+      }
+      if (subEl) {
+        subEl.innerHTML = `Your 72-hour free trial is currently <strong>active</strong> and full quiz access is open! You can upgrade early now for <strong>380 Birr</strong> (discounted from 600 Birr) to secure permanent Lifetime Access and avoid any interruptions after your trial ends.`;
+      }
+      if (backBtn) {
+        backBtn.style.display = 'block';
+      }
+    } else if (isSuspended) {
+      if (iconEl) iconEl.innerText = '🔒';
+      if (titleEl) {
+        titleEl.innerText = 'Account Suspended';
+      }
+      if (subEl) {
+        subEl.innerText = 'Your account has been suspended. Complete your one-time payment of 380 Birr (discounted from 600 Birr) and send your receipt to @CLN_AAU_Admin on Telegram to reactivate full lifetime access.';
+      }
+      if (backBtn) {
+        backBtn.style.display = 'none';
+      }
+    } else {
+      if (iconEl) iconEl.innerText = '⌛';
+      if (titleEl) {
+        titleEl.innerText = '3-Day Free Trial Ended';
+      }
+      if (subEl) {
+        subEl.innerText = 'Your 72-hour free trial has concluded. Complete your one-time payment of 380 Birr (discounted from 600 Birr) to unlock unlimited lifetime access to all course questions, detailed explanations, and the Sunday Live Arena!';
+      }
+      if (backBtn) {
+        backBtn.style.display = 'none';
+      }
+    }
   },
 
   // HIERARCHICAL CONTENT TREE BUILDER & MANAGER
