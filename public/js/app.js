@@ -24,6 +24,18 @@ const app = {
     window.addEventListener('cln:user-suspended', (e) => {
       this.showView('suspended');
     });
+
+    window.addEventListener('cln:auth-expired', (e) => {
+      this.state.user = null;
+      API.clearToken();
+      this.renderNavUserArea();
+      this.showView('login');
+      const loginErr = document.getElementById('login-error');
+      if (loginErr) {
+        loginErr.textContent = 'Your session has expired or is invalid. Please log in again.';
+        loginErr.style.display = 'block';
+      }
+    });
   },
 
   async checkAuth() {
@@ -39,8 +51,16 @@ const app = {
           this.renderNavUserArea();
         }
       } catch (err) {
-        // Will dispatch cln:user-suspended if suspended or trial expired
+        // If profile fetch fails due to token invalidation or expiry, clear stale state
+        if (err.message && (err.message.toLowerCase().includes('token') || err.message.toLowerCase().includes('unauthorized') || err.message.toLowerCase().includes('expired'))) {
+          API.clearToken();
+          this.state.user = null;
+          this.renderNavUserArea();
+        }
       }
+    } else {
+      this.state.user = null;
+      this.renderNavUserArea();
     }
   },
 

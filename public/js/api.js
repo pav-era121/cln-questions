@@ -59,6 +59,11 @@ const API = {
         if (data && data.suspended) {
           window.dispatchEvent(new CustomEvent('cln:user-suspended', { detail: data }));
         }
+        if (response.status === 401 || (response.status === 403 && data && data.error && (data.error.toLowerCase().includes('token') || data.error.toLowerCase().includes('expired')))) {
+          console.warn('Authentication token expired or invalid. Clearing session storage.');
+          this.clearToken();
+          window.dispatchEvent(new CustomEvent('cln:auth-expired', { detail: data }));
+        }
         throw new Error(data.error || `Request failed with status ${response.status}`);
       }
 
