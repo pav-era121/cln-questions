@@ -87,20 +87,20 @@ const app = {
       let planBadge = '';
       if (!isAdmin) {
         if (user.isPaid) {
-          planBadge = `<span class="status-badge status-paid" style="font-size:0.75rem; text-transform:none;">👑 Semester Member</span>`;
+          planBadge = `<span class="status-badge status-paid" style="font-size:0.74rem; padding:2px 8px; text-transform:none;" title="Full Semester Member">👑 Semester</span>`;
         } else if (user.hoursLeft > 0) {
-          planBadge = `<span class="status-badge status-trial" style="font-size:0.75rem; cursor:pointer; text-transform:none;" onclick="app.showTrialUpgradeInfo()" title="Click to view upgrade information">⏳ Trial: ${user.hoursLeft}h left</span>`;
+          planBadge = `<span class="status-badge status-trial" style="font-size:0.74rem; padding:2px 8px; cursor:pointer; text-transform:none;" onclick="app.showTrialUpgradeInfo()" title="Click to view upgrade information">⏳ ${user.hoursLeft}h left</span>`;
         } else {
-          planBadge = `<span class="status-badge status-expired" style="font-size:0.75rem; cursor:pointer; text-transform:none;" onclick="app.showTrialUpgradeInfo()">⌛ Trial Expired (Choose Plan)</span>`;
+          planBadge = `<span class="status-badge status-expired" style="font-size:0.74rem; padding:2px 8px; cursor:pointer; text-transform:none;" onclick="app.showTrialUpgradeInfo()" title="Trial expired">⌛ Upgrade</span>`;
         }
       }
 
       area.innerHTML = `
-        <div class="user-pill" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-          <span style="font-weight:700; font-size:0.9rem;">${this.escapeHtml(user.fullName)} ${isAdmin ? '(Admin)' : ''}</span>
+        <div class="user-pill">
+          <span class="user-pill-name">${this.escapeHtml(user.fullName)} ${isAdmin ? '(Admin)' : ''}</span>
           ${planBadge}
           ${!isAdmin ? `<span class="xp-badge">⚡ ${user.totalXp || 0} XP</span>` : ''}
-          <button class="btn btn-sm btn-secondary" style="color:#fff; border-color:rgba(255,255,255,0.4); padding:4px 10px;" onclick="app.handleLogout()">Log Out</button>
+          <button class="btn-nav-logout" onclick="app.handleLogout()" title="Log out of account">Log Out</button>
         </div>
       `;
     } else {

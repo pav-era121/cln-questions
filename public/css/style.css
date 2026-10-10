@@ -70,70 +70,115 @@ body {
   box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
 
+.navbar .container {
+  max-width: 1360px;
+  width: 100%;
+  padding: 0 20px;
+}
+
 .nav-container {
   display: flex;
   justify-content: space-between;
   align-items: center;
   height: 64px;
+  gap: 16px;
 }
 
 .brand-logo {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   text-decoration: none;
   color: #FFFFFF;
   font-weight: 700;
-  font-size: 1.2rem;
+  font-size: 1.15rem;
   letter-spacing: -0.01em;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .brand-badge {
   background: linear-gradient(135deg, var(--blue), var(--green));
   color: #FFFFFF;
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 6px;
-  font-size: 0.85rem;
+  font-size: 0.72rem;
   font-weight: 800;
+  letter-spacing: 0.5px;
 }
 
 .nav-links {
   display: flex;
-  gap: 20px;
+  gap: 8px;
   align-items: center;
   list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
 .nav-link {
   color: rgba(255, 255, 255, 0.85);
   text-decoration: none;
-  font-weight: 500;
-  font-size: 0.95rem;
-  transition: color 0.2s;
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 6px 12px;
+  border-radius: 8px;
+  transition: all 0.2s;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .nav-link:hover, .nav-link.active {
   color: #FFFFFF;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .user-pill {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   background: rgba(255, 255, 255, 0.1);
-  padding: 6px 14px;
+  padding: 4px 10px;
   border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  white-space: nowrap;
+  flex-wrap: nowrap;
+}
+
+.user-pill-name {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: #FFFFFF;
+  white-space: nowrap;
 }
 
 .xp-badge {
   background: var(--gold);
   color: #172033;
-  padding: 2px 8px;
+  padding: 2px 7px;
   border-radius: 12px;
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   font-weight: 800;
+  white-space: nowrap;
+}
+
+.btn-nav-logout {
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 3px 8px;
+  font-size: 0.76rem;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.btn-nav-logout:hover {
+  background: rgba(239, 68, 68, 0.85);
+  border-color: rgba(239, 68, 68, 0.9);
+  color: #FFFFFF;
 }
 
 /* BUTTONS */
@@ -906,6 +951,43 @@ body {
   border-radius: var(--radius);
   padding: 22px 26px;
   margin-top: 24px;
+}
+
+/* TABLET / MEDIUM DESKTOP NAVBAR STREAMLINING */
+@media (max-width: 1120px) and (min-width: 769px) {
+  .navbar .container {
+    padding: 0 12px;
+  }
+  .nav-links {
+    gap: 4px;
+  }
+  .nav-link {
+    font-size: 0.85rem;
+    padding: 5px 8px;
+  }
+  .brand-logo {
+    font-size: 1.05rem;
+    gap: 6px;
+  }
+  .brand-badge {
+    display: none;
+  }
+  .nav-support-link {
+    padding: 4px 8px;
+    font-size: 0.8rem;
+  }
+  .nav-support-text {
+    display: none;
+  }
+  .user-pill {
+    padding: 3px 8px;
+    gap: 6px;
+  }
+  .user-pill-name {
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 
 /* RESPONSIVE MOBILE STYLES */
