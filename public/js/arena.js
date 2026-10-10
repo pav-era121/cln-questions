@@ -840,8 +840,8 @@ const arena = {
 
   async checkInLobby(sessionId) {
     if (!app.state.user) {
-      alert('Please log in or create an account to enter the Sunday Arena.');
-      app.showView('login');
+      alert('Please register a student account or log in to enter the Sunday Arena.');
+      app.showView('register');
       return;
     }
 

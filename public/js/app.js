@@ -108,9 +108,9 @@ const app = {
       adminNavs.forEach(el => el.style.display = 'none');
 
       area.innerHTML = `
-        <div style="display:flex; gap:10px;">
-          <button class="btn btn-sm btn-secondary" style="color:#fff; border-color:rgba(255,255,255,0.4);" onclick="app.showView('login')">Log In</button>
+        <div style="display:flex; gap:10px; align-items:center;">
           <button class="btn btn-sm btn-primary" onclick="app.showView('register')">Register</button>
+          <button class="btn btn-sm btn-secondary" style="color:#fff; border-color:rgba(255,255,255,0.4);" onclick="app.showView('login')">Log In</button>
         </div>
       `;
     }
@@ -471,8 +471,8 @@ const app = {
 
   startChapterQuiz(quizId) {
     if (!this.state.user) {
-      alert('Please log in or register a student account to take timed practice quizzes.');
-      this.showView('login');
+      alert('Please register or log in to a student account to take timed practice quizzes.');
+      this.showView('register');
       return;
     }
     quizEngine.start(quizId);
