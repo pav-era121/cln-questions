@@ -561,14 +561,27 @@ const arena = {
   // STATE 2: LOBBY
   renderLobbyState(data) {
     const isJoined = data.isJoined;
+    setTimeout(() => this.startLobbyCountdownTimer(data.scheduledAt), 50);
 
     return `
       <div class="arena-hero-card">
         <div class="arena-badge-live" style="background:#10b981;">🟢 PRE-FLIGHT LOBBY OPEN</div>
         <h1 style="font-size:2.1rem; font-weight:900; margin:16px 0 8px;">${app.escapeHtml(data.title)}</h1>
-        <p style="font-size:1rem; opacity:0.9; max-width:550px; margin:0 auto 20px;">
-          The lobby is now open. Contest will begin promptly when the administrator fires the start cue!
+        <p style="font-size:1rem; opacity:0.9; max-width:550px; margin:0 auto 16px;">
+          The lobby is now open! Question 1 starts automatically at 8:00 PM sharp. Ready up!
         </p>
+
+        <!-- LOBBY COUNTDOWN TIMER -->
+        <div style="background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.2); border-radius:16px; display:inline-block; padding:12px 28px; margin-bottom:20px;">
+          <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:1px; color:#ffd166; font-weight:800; margin-bottom:4px;">
+            Starting Automatically In
+          </div>
+          <div id="lobby-countdown-digits" style="font-size:2rem; font-weight:900; font-family:monospace; letter-spacing:2px; color:#fff;">
+            --:--
+          </div>
+        </div>
+
+        <br>
 
         <div style="display:inline-flex; align-items:center; gap:8px; background:rgba(255,255,255,0.15); padding:8px 20px; border-radius:24px; font-weight:700; margin-bottom:24px;">
           <span>👥</span>
@@ -594,6 +607,31 @@ const arena = {
         </div>
       </div>
     `;
+  },
+
+  startLobbyCountdownTimer(targetIso) {
+    if (this.state.localTimer) clearInterval(this.state.localTimer);
+
+    const update = () => {
+      const now = Date.now();
+      const target = new Date(targetIso).getTime();
+      const diff = Math.max(0, target - now);
+
+      const m = Math.floor(diff / 1000 / 60);
+      const s = Math.floor((diff / 1000) % 60);
+
+      const el = document.getElementById('lobby-countdown-digits');
+      if (el) {
+        if (diff <= 0) {
+          el.innerHTML = '<span style="color:#10b981;">STARTING NOW!</span>';
+        } else {
+          el.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        }
+      }
+    };
+
+    update();
+    this.state.localTimer = setInterval(update, 1000);
   },
 
   // STATE 3: ACTIVE SYNCHRONIZED QUESTION

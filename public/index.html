@@ -1047,6 +1047,27 @@
             </div>
           </div>
 
+          <!-- AUTONOMOUS AUTO-PILOT BANNER -->
+          <div style="background:linear-gradient(135deg, #0f2447, #1e3a8a); color:#fff; border-radius:12px; padding:18px 22px; margin-bottom:24px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+            <div style="display:flex; align-items:center; gap:14px;">
+              <div style="font-size:2.2rem;">🤖</div>
+              <div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <h4 style="margin:0; font-size:1.05rem; font-weight:800; color:#fff;">Autonomous Sunday Arena Auto-Pilot</h4>
+                  <span id="arena-autopilot-badge" style="background:#10b981; color:#fff; font-size:0.72rem; font-weight:800; padding:2px 8px; border-radius:12px; letter-spacing:0.5px;">ACTIVE</span>
+                </div>
+                <p style="margin:4px 0 0; font-size:0.83rem; color:#cbd5e1; max-width:680px; line-height:1.4;">
+                  The Sunday Arena runs <strong>100% automatically</strong>. Even when you are away or busy, the server will open the pre-flight lobby 15 minutes before 8:00 PM, fire Question 1 at 8:00 PM sharp, advance every question synchronously, compute podium winners with bonus XP, and queue the next week's session autonomously.
+                </p>
+              </div>
+            </div>
+            <div style="display:flex; gap:10px; align-items:center;">
+              <button id="arena-autopilot-btn" class="btn btn-sm" style="background:rgba(255,255,255,0.15); color:#fff; border:1px solid rgba(255,255,255,0.3); font-weight:700;" onclick="app.toggleArenaAutoPilot()">
+                Auto-Pilot: ON
+              </button>
+            </div>
+          </div>
+
           <!-- SESSION CREATOR -->
           <div style="background:var(--bg-main); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:24px;">
             <h4 style="font-size:1rem; font-weight:700; color:var(--navy); margin-bottom:12px;">Schedule New Arena Competition</h4>

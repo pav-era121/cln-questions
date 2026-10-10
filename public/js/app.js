@@ -914,6 +914,20 @@ const app = {
       }
 
       const data = await API.adminArenaMonitor();
+
+      // Update Auto-Pilot UI controls
+      const apBadge = document.getElementById('arena-autopilot-badge');
+      const apBtn = document.getElementById('arena-autopilot-btn');
+      const isAutoPilot = data ? (data.autoPilot !== false) : true;
+      if (apBadge) {
+        apBadge.textContent = isAutoPilot ? 'ACTIVE' : 'PAUSED';
+        apBadge.style.background = isAutoPilot ? '#10b981' : '#f59e0b';
+      }
+      if (apBtn) {
+        apBtn.textContent = isAutoPilot ? 'Auto-Pilot: ON' : 'Auto-Pilot: OFF';
+        apBtn.style.background = isAutoPilot ? 'rgba(16, 185, 129, 0.25)' : 'rgba(245, 158, 11, 0.25)';
+      }
+
       const container = document.getElementById('admin-arena-live-monitor');
       if (!container) return;
 
@@ -931,7 +945,12 @@ const app = {
       container.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
           <div>
-            <span style="font-size:0.75rem; font-weight:800; text-transform:uppercase; letter-spacing:1px; background:#eff6ff; color:#2563eb; padding:2px 8px; border-radius:6px;">Current Session</span>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:0.75rem; font-weight:800; text-transform:uppercase; letter-spacing:1px; background:#eff6ff; color:#2563eb; padding:2px 8px; border-radius:6px;">Current Session</span>
+              <span style="font-size:0.72rem; font-weight:800; background:${isAutoPilot ? '#ecfdf5' : '#fffbeb'}; color:${isAutoPilot ? '#059669' : '#d97706'}; padding:2px 8px; border-radius:6px; border:1px solid ${isAutoPilot ? '#a7f3d0' : '#fde68a'};">
+                🤖 Auto-Pilot: ${isAutoPilot ? 'Active' : 'Paused'}
+              </span>
+            </div>
             <h4 style="font-size:1.15rem; font-weight:800; color:var(--navy); margin:4px 0 2px;">${this.escapeHtml(data.title)}</h4>
             <div style="font-size:0.85rem; color:var(--text-muted);">
               Status: <strong style="color:#2563eb;">${data.status}</strong> • Questions: <strong>${data.totalQuestions}</strong> • Registered Students: <strong>${data.participantCount}</strong>
@@ -1009,6 +1028,19 @@ const app = {
       this.loadAdminArenaQuestionsPreview();
     } catch (err) {
       console.warn('Failed to load admin arena tab:', err.message);
+    }
+  },
+
+  async toggleArenaAutoPilot() {
+    try {
+      const data = await API.adminArenaMonitor();
+      const current = data ? (data.autoPilot !== false) : true;
+      const res = await API.adminArenaToggleAutoPilot(!current);
+      const isNow = res.autoPilot;
+      this.showToast(`Auto-Pilot is now ${isNow ? 'ACTIVE (Automatic Starts)' : 'PAUSED (Manual Controls Only)'}`);
+      this.loadAdminArenaTab();
+    } catch (err) {
+      this.showToast('Failed to toggle Auto-Pilot: ' + err.message, 'error');
     }
   },
 

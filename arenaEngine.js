@@ -9,6 +9,8 @@ class ArenaEngine {
     this.participants = new Map(); // userId -> { userId, userName, totalScore, totalTimeMs, answers: {} }
     this.timerInterval = null;
     this.autoAdvance = true;
+    this.autoPilot = true; // Autonomous self-starting & managing engine
+    this.masterSchedulerInterval = null;
   }
 
   async init(database) {
@@ -66,27 +68,35 @@ class ArenaEngine {
         await this.ensureUpcomingSundaySession();
       }
 
-      console.log('✅ Arena Engine initialized successfully.');
+      // 4. Launch Autonomous Master Scheduler
+      this.startMasterScheduler();
+
+      console.log('✅ Arena Engine initialized successfully with Autonomous Auto-Pilot active.');
     } catch (err) {
       console.error('❌ Arena Engine initialization error:', err.message);
     }
   }
 
-  // Calculate next Sunday at 8:00 PM (East Africa Time / Local time)
+  // Calculate next Sunday at 8:00 PM (East Africa Time: UTC+3 -> 17:00 UTC)
   getNextSunday8PM() {
     const now = new Date();
-    const nextSun = new Date(now);
-    const day = now.getDay(); // 0 is Sunday
-    const diff = (7 - day) % 7;
+    const eatOffsetMs = 3 * 60 * 60 * 1000;
+    const eatNow = new Date(now.getTime() + eatOffsetMs);
+    const eatDay = eatNow.getUTCDay(); // 0 is Sunday
+    let daysUntilSunday = (7 - eatDay) % 7;
     
-    // If today is Sunday and it's already past 20:00 (8 PM), set to next Sunday
-    if (diff === 0 && (now.getHours() > 20 || (now.getHours() === 20 && now.getMinutes() > 0))) {
-      nextSun.setDate(now.getDate() + 7);
-    } else {
-      nextSun.setDate(now.getDate() + diff);
+    // If today is Sunday in EAT and it's already past 20:00 (8 PM EAT), set to next Sunday
+    if (daysUntilSunday === 0 && (eatNow.getUTCHours() > 20 || (eatNow.getUTCHours() === 20 && eatNow.getUTCMinutes() > 0))) {
+      daysUntilSunday = 7;
     }
-    nextSun.setHours(20, 0, 0, 0);
-    return nextSun.toISOString();
+    
+    const eatTargetDate = new Date(eatNow);
+    eatTargetDate.setUTCDate(eatNow.getUTCDate() + daysUntilSunday);
+    eatTargetDate.setUTCHours(20, 0, 0, 0); // 20:00:00 EAT
+    
+    // Convert back to UTC ISO string
+    const targetUtc = new Date(eatTargetDate.getTime() - eatOffsetMs);
+    return targetUtc.toISOString();
   }
 
   async ensureUpcomingSundaySession() {
@@ -121,21 +131,169 @@ class ArenaEngine {
       );
 
       await this.loadActiveSession();
-      console.log(`🏆 Created official upcoming Sunday Arena session: ${sessionId}`);
+      console.log(`🏆 Created official upcoming Sunday Arena session: ${sessionId} (Scheduled for ${scheduledAt})`);
     } catch (err) {
       console.error('Error ensuring Sunday session:', err.message);
     }
   }
 
+  // Master Scheduler: Checks clocks every 3 seconds to auto-transition sessions
+  startMasterScheduler() {
+    if (this.masterSchedulerInterval) clearInterval(this.masterSchedulerInterval);
+
+    this.masterSchedulerInterval = setInterval(() => {
+      this.checkMasterScheduler().catch(err => {
+        console.error('Master scheduler error:', err.message);
+      });
+    }, 3000);
+
+    setTimeout(() => {
+      this.checkMasterScheduler().catch(err => {
+        console.error('Initial master scheduler check error:', err.message);
+      });
+    }, 1000);
+  }
+
+  async checkMasterScheduler() {
+    if (!this.autoPilot) return;
+
+    const now = Date.now();
+
+    // 1. If no active session, ensure upcoming Sunday session
+    if (!this.activeSession) {
+      await this.ensureUpcomingSundaySession();
+      return;
+    }
+
+    // 2. If the current session ended and 60 minutes have elapsed, transition to next week
+    if (this.activeSession.status === 'ENDED') {
+      const scheduledMs = new Date(this.activeSession.scheduled_at).getTime();
+      const cooldownMs = 60 * 60 * 1000;
+      if (now > scheduledMs + cooldownMs) {
+        const nextScheduled = await this.db.prepare(`
+          SELECT id FROM arena_sessions 
+          WHERE status = 'SCHEDULED' AND scheduled_at > ?
+          ORDER BY scheduled_at ASC LIMIT 1
+        `).get(new Date(now).toISOString());
+
+        if (nextScheduled) {
+          await this.loadActiveSession();
+        } else {
+          console.log('🔄 [Auto-Pilot] Transitioning from ended session to next week Sunday session...');
+          await this.ensureUpcomingSundaySession();
+        }
+      }
+      return;
+    }
+
+    const scheduledMs = new Date(this.activeSession.scheduled_at).getTime();
+    if (isNaN(scheduledMs)) return;
+
+    // 3. Auto-open LOBBY 15 minutes before scheduled start time
+    const lobbyOpenTimeMs = scheduledMs - (15 * 60 * 1000);
+
+    if (this.activeSession.status === 'SCHEDULED' && now >= lobbyOpenTimeMs && now < scheduledMs) {
+      console.log(`🟢 [Auto-Pilot] 15 minutes to start! Automatically opening pre-flight lobby for "${this.activeSession.title}"`);
+      await this.adminSetStatus('LOBBY');
+      return;
+    }
+
+    // 4. Auto-start ACTIVE competition when scheduled time is reached
+    if ((this.activeSession.status === 'SCHEDULED' || this.activeSession.status === 'LOBBY') && now >= scheduledMs) {
+      if (!this.questions || this.questions.length === 0) {
+        console.warn('⚠️ [Auto-Pilot] Questions missing prior to start, auto-populating from pool...');
+        await this.autoPopulateQuestionsIfEmpty();
+      }
+
+      if (this.questions && this.questions.length > 0) {
+        console.log(`🚀 [Auto-Pilot] Scheduled time reached! Automatically firing Question 1 for "${this.activeSession.title}"`);
+        await this.adminSetStatus('ACTIVE');
+      } else {
+        console.error('❌ [Auto-Pilot] Could not auto-start: No questions available in question bank.');
+      }
+      return;
+    }
+  }
+
+  async autoPopulateQuestionsIfEmpty() {
+    if (!this.activeSession) return;
+
+    const arenaQRows = await this.db.prepare(`
+      SELECT id FROM arena_questions WHERE session_id = ?
+    `).all(this.activeSession.id);
+
+    if (arenaQRows && arenaQRows.length > 0) {
+      await this.loadActiveSession();
+      return;
+    }
+
+    let currentIds = [];
+    try {
+      currentIds = JSON.parse(this.activeSession.question_ids || '[]');
+    } catch(e) {
+      currentIds = [];
+    }
+
+    if (currentIds.length > 0) {
+      await this.loadActiveSession();
+      if (this.questions && this.questions.length > 0) return;
+    }
+
+    const randomQuestions = await this.db.prepare(`
+      SELECT id FROM questions 
+      WHERE question_text IS NOT NULL AND option_a IS NOT NULL AND option_b IS NOT NULL
+      ORDER BY RANDOM() LIMIT 25
+    `).all();
+
+    if (randomQuestions && randomQuestions.length > 0) {
+      const qIds = randomQuestions.map(q => q.id);
+      await this.db.prepare(`
+        UPDATE arena_sessions SET question_ids = ? WHERE id = ?
+      `).run(JSON.stringify(qIds), this.activeSession.id);
+      await this.loadActiveSession();
+      console.log(`✅ [Auto-Pilot] Populated 25 questions from bank for session ${this.activeSession.id}`);
+    }
+  }
+
   async loadActiveSession() {
     try {
-      // Find session in 'ACTIVE', 'LOBBY', or most recent 'SCHEDULED' / 'ENDED'
+      // 1. Try to find a currently running session ('ACTIVE' or 'LOBBY')
       let session = await this.db.prepare(`
         SELECT * FROM arena_sessions 
         WHERE status IN ('ACTIVE', 'LOBBY')
         ORDER BY created_at DESC LIMIT 1
       `).get();
 
+      // If a session has been sitting in LOBBY or ACTIVE for more than 6 hours past its scheduled time, retire it as ENDED
+      if (session) {
+        const schedTime = new Date(session.scheduled_at).getTime();
+        if (!isNaN(schedTime) && (Date.now() - schedTime > 6 * 60 * 60 * 1000)) {
+          console.log(`🧹 Auto-retiring stale arena session ${session.id} (was scheduled ${session.scheduled_at})`);
+          await this.db.prepare("UPDATE arena_sessions SET status = 'ENDED' WHERE id = ?").run(session.id);
+          session = null;
+        }
+      }
+
+      // 2. If no running session, check for upcoming SCHEDULED sessions
+      if (!session) {
+        session = await this.db.prepare(`
+          SELECT * FROM arena_sessions 
+          WHERE status = 'SCHEDULED' AND scheduled_at >= ?
+          ORDER BY scheduled_at ASC LIMIT 1
+        `).get(new Date(Date.now() - 30 * 60 * 1000).toISOString());
+      }
+
+      // 3. If no upcoming scheduled session, check if there's a recently ENDED session within the last 60 minutes
+      if (!session) {
+        const sixtyMinAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+        session = await this.db.prepare(`
+          SELECT * FROM arena_sessions 
+          WHERE status = 'ENDED' AND created_at >= ?
+          ORDER BY created_at DESC LIMIT 1
+        `).get(sixtyMinAgo);
+      }
+
+      // 4. Otherwise, fallback to the most recent session
       if (!session) {
         session = await this.db.prepare(`
           SELECT * FROM arena_sessions 
@@ -502,6 +660,7 @@ class ArenaEngine {
       currentQuestionStartedAt: sess.current_question_started_at,
       serverTime: now,
       participantCount: this.participants.size,
+      autoPilot: this.autoPilot,
       isJoined,
       myStatus: {
         answered: !!myAnswer,

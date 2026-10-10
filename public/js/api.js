@@ -299,5 +299,12 @@ const API = {
   async adminArenaGetQuestions(sessionId) {
     const query = sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : '';
     return await this.request(`/admin/arena/questions${query}`);
+  },
+
+  async adminArenaToggleAutoPilot(enabled) {
+    return await this.request('/admin/arena/autopilot', {
+      method: 'POST',
+      body: JSON.stringify({ enabled })
+    });
   }
 };

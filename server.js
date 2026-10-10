@@ -1461,6 +1461,19 @@ app.get('/api/admin/arena/monitor', authenticateToken, requireAdmin, (req, res) 
   }
 });
 
+// Admin Toggle Auto-Pilot
+app.post('/api/admin/arena/autopilot', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const { enabled } = req.body;
+    if (typeof enabled === 'boolean') {
+      arenaEngine.autoPilot = enabled;
+    }
+    res.json({ message: 'Auto-pilot setting updated.', autoPilot: arenaEngine.autoPilot });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // Admin Upload & Attach Questions to Sunday Arena
 app.post('/api/admin/arena/upload-questions', authenticateToken, requireAdmin, async (req, res) => {
   try {
