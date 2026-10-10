@@ -99,9 +99,47 @@ function authenticateToken(req, res, next) {
 }
 
 const PAYMENT_INFO = {
+  bundles: [
+    {
+      id: 'solo',
+      name: 'Solo Semester Pass',
+      badge: '1 Student',
+      price: 380,
+      originalPrice: 600,
+      discount: 'Save 37%',
+      perStudent: 380,
+      duration: '1 Semester',
+      description: 'Full 1-semester access for 1 student to all courses, chapters, quizzes & Sunday Arena.'
+    },
+    {
+      id: 'dorm',
+      name: 'Dorm Squad Deal',
+      badge: '4 Students • Most Popular 🔥',
+      price: 1200,
+      originalPrice: 1520,
+      discount: 'Save 320 ETB Total',
+      perStudent: 300,
+      savingPerStudent: 80,
+      duration: '1 Semester',
+      description: 'Activate 4 student accounts (300 ETB each — Save 80 ETB per student).'
+    },
+    {
+      id: 'floor',
+      name: 'Floor / Section Deal',
+      badge: '8 Students • Best Value ⚡',
+      price: 2000,
+      originalPrice: 3040,
+      discount: 'Save 1,040 ETB Total',
+      perStudent: 250,
+      savingPerStudent: 130,
+      duration: '1 Semester',
+      description: 'Activate 8 student accounts (250 ETB each — Save 130 ETB per student).'
+    }
+  ],
   amount: 380,
   originalPrice: 600,
   discount: '37% OFF',
+  accessDuration: 'One Semester Access',
   cbe: {
     bankName: 'Commercial Bank of Ethiopia (CBE)',
     accountNumber: '1000253063452',
@@ -140,7 +178,7 @@ async function verifyActiveUser(req, res, next) {
         suspended: true,
         trialExpired: false,
         error: 'Your account has been suspended.',
-        message: 'Your account is suspended. To activate your account, complete your payment of 380 Birr (discounted from 600 Birr) via CBE account 1000253063452 (EYOB) or Telebirr (0950113361) and send your receipt to @CLN_AAU_Admin on Telegram.',
+        message: 'Your account is suspended. To activate your 1-semester access, complete your payment (Solo: 380 ETB | Dorm Squad of 4: 1,200 ETB | Section Deal of 8: 2,000 ETB) via CBE account 1000253063452 (EYOB) or Telebirr (0950113361) and send your receipt to @CLN_AAU_Admin on Telegram.',
         supportContact: '@CLN_AAU_Admin',
         telegramUrl: 'https://t.me/CLN_AAU_Admin',
         paymentInfo: PAYMENT_INFO
@@ -166,7 +204,7 @@ async function verifyActiveUser(req, res, next) {
           suspended: true,
           trialExpired: true,
           error: 'Your 3-day free trial has expired.',
-          message: 'Your 72-hour free trial has ended. Please complete your payment of 380 Birr (discounted from 600 Birr) via CBE account 1000253063452 (EYOB) or Telebirr (0950113361) and send your receipt to @CLN_AAU_Admin on Telegram to reactivate your account.',
+          message: 'Your 72-hour free trial has ended. Please choose a semester bundle (Solo: 380 ETB | Dorm Squad of 4: 1,200 ETB | Section Deal of 8: 2,000 ETB) and pay via CBE account 1000253063452 (EYOB) or Telebirr (0950113361), then send your receipt to @CLN_AAU_Admin on Telegram to activate full semester access.',
           supportContact: '@CLN_AAU_Admin',
           telegramUrl: 'https://t.me/CLN_AAU_Admin',
           paymentInfo: PAYMENT_INFO
@@ -322,7 +360,7 @@ app.post('/api/auth/login', async (req, res) => {
         suspended: true,
         trialExpired: isTrialExpired,
         error: isTrialExpired ? 'Your 3-day free trial has expired.' : 'Your account has been suspended.',
-        message: 'Please complete your payment of 380 Birr (discounted from 600 Birr) via CBE account 1000253063452 (EYOB) or Telebirr (0950113361) and send your receipt to @CLN_AAU_Admin on Telegram to reactivate your account.',
+        message: 'Please choose a semester bundle (Solo: 380 ETB | Dorm Squad of 4: 1,200 ETB | Section Deal of 8: 2,000 ETB) and pay via CBE account 1000253063452 (EYOB) or Telebirr (0950113361), then send your receipt to @CLN_AAU_Admin on Telegram to activate full semester access.',
         supportContact: '@CLN_AAU_Admin',
         telegramUrl: 'https://t.me/CLN_AAU_Admin',
         paymentInfo: PAYMENT_INFO
@@ -382,7 +420,7 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
         suspended: true,
         trialExpired: isTrialExpired,
         error: isTrialExpired ? 'Your 3-day free trial has expired.' : 'Your account has been suspended.',
-        message: 'Please complete your payment of 380 Birr (discounted from 600 Birr) via CBE account 1000253063452 (EYOB) or Telebirr (0950113361) and send your receipt to @CLN_AAU_Admin on Telegram.',
+        message: 'Please choose a semester bundle (Solo: 380 ETB | Dorm Squad of 4: 1,200 ETB | Section Deal of 8: 2,000 ETB) and pay via CBE account 1000253063452 (EYOB) or Telebirr (0950113361), then send your receipt to @CLN_AAU_Admin on Telegram to activate full semester access.',
         supportContact: '@CLN_AAU_Admin',
         telegramUrl: 'https://t.me/CLN_AAU_Admin',
         paymentInfo: PAYMENT_INFO

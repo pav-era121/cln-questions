@@ -87,11 +87,11 @@ const app = {
       let planBadge = '';
       if (!isAdmin) {
         if (user.isPaid) {
-          planBadge = `<span class="status-badge status-paid" style="font-size:0.75rem; text-transform:none;">👑 Lifetime Member</span>`;
+          planBadge = `<span class="status-badge status-paid" style="font-size:0.75rem; text-transform:none;">👑 Semester Member</span>`;
         } else if (user.hoursLeft > 0) {
           planBadge = `<span class="status-badge status-trial" style="font-size:0.75rem; cursor:pointer; text-transform:none;" onclick="app.showTrialUpgradeInfo()" title="Click to view upgrade information">⏳ Trial: ${user.hoursLeft}h left</span>`;
         } else {
-          planBadge = `<span class="status-badge status-expired" style="font-size:0.75rem; cursor:pointer; text-transform:none;" onclick="app.showTrialUpgradeInfo()">⌛ Trial Expired (Pay 380 ETB)</span>`;
+          planBadge = `<span class="status-badge status-expired" style="font-size:0.75rem; cursor:pointer; text-transform:none;" onclick="app.showTrialUpgradeInfo()">⌛ Trial Expired (Choose Plan)</span>`;
         }
       }
 
@@ -1359,12 +1359,12 @@ const app = {
   },
 
   async activateUserPaid(userId) {
-    if (!confirm('Confirm activating this student account with Full Lifetime Paid Access (380 ETB payment received)?')) {
+    if (!confirm('Confirm activating this student account with Full Semester Paid Access (payment received)?')) {
       return;
     }
     try {
       await API.updateUserStatus(userId, 'ACTIVE', true);
-      alert('Student account activated with lifetime full access!');
+      alert('Student account activated with full semester access!');
       await this.loadAdminUsers();
     } catch (err) {
       alert('Failed to activate student account: ' + err.message);
@@ -1428,6 +1428,36 @@ const app = {
     this.showView('suspended');
   },
 
+  selectBundle(bundleId, amount, label) {
+    this.state.selectedBundle = { id: bundleId, amount, label };
+    
+    const telebirrDue = document.getElementById('telebirr-amount-due');
+    if (telebirrDue) {
+      telebirrDue.innerText = `${amount} ETB`;
+    }
+    const cbeDue = document.getElementById('cbe-amount-due');
+    if (cbeDue) {
+      cbeDue.innerText = `${amount} ETB`;
+    }
+    const bundleNotice = document.getElementById('selected-bundle-notice');
+    if (bundleNotice) {
+      bundleNotice.innerHTML = `Selected Plan: <strong style="color:var(--navy);">${this.escapeHtml(label)} — ${amount} ETB</strong>`;
+      bundleNotice.style.display = 'block';
+    }
+
+    document.querySelectorAll('.bundle-card').forEach(c => {
+      c.style.borderColor = 'var(--border)';
+      c.style.boxShadow = 'none';
+      c.style.transform = 'scale(1)';
+    });
+    const selected = document.getElementById(`bundle-card-${bundleId}`);
+    if (selected) {
+      selected.style.borderColor = bundleId === 'floor' ? '#16a34a' : (bundleId === 'dorm' ? '#2563eb' : 'var(--primary)');
+      selected.style.boxShadow = '0 6px 20px rgba(37,99,235,0.25)';
+      selected.style.transform = 'scale(1.02)';
+    }
+  },
+
   renderSuspendedView() {
     const titleEl = document.getElementById('suspended-title');
     const subEl = document.getElementById('suspended-subtitle');
@@ -1445,7 +1475,7 @@ const app = {
         titleEl.innerHTML = `Active 3-Day Free Trial <span style="display:block; font-size:1.25rem; color:#16a34a; margin-top:6px; font-weight:700;">(${hours} Hours Remaining)</span>`;
       }
       if (subEl) {
-        subEl.innerHTML = `Your 72-hour free trial is currently <strong>active</strong> and full quiz access is open! You can upgrade early now for <strong>380 Birr</strong> (discounted from 600 Birr) to secure permanent Lifetime Access and avoid any interruptions after your trial ends.`;
+        subEl.innerHTML = `Your 72-hour free trial is currently <strong>active</strong> with full quiz access! You can choose any of the <strong>1-semester bundles below</strong> at any time to upgrade early and avoid interruptions once your trial ends.`;
       }
       if (backBtn) {
         backBtn.style.display = 'block';
@@ -1456,7 +1486,7 @@ const app = {
         titleEl.innerText = 'Account Suspended';
       }
       if (subEl) {
-        subEl.innerText = 'Your account has been suspended. Complete your one-time payment of 380 Birr (discounted from 600 Birr) and send your receipt to @CLN_AAU_Admin on Telegram to reactivate full lifetime access.';
+        subEl.innerText = 'Your account has been suspended. Choose your preferred semester bundle below and send your payment receipt to @CLN_AAU_Admin on Telegram to reactivate full semester access.';
       }
       if (backBtn) {
         backBtn.style.display = 'none';
@@ -1467,7 +1497,7 @@ const app = {
         titleEl.innerText = '3-Day Free Trial Ended';
       }
       if (subEl) {
-        subEl.innerText = 'Your 72-hour free trial has concluded. Complete your one-time payment of 380 Birr (discounted from 600 Birr) to unlock unlimited lifetime access to all course questions, detailed explanations, and the Sunday Live Arena!';
+        subEl.innerText = 'Your 72-hour free trial has concluded. Select a semester bundle below to unlock full semester access to all course questions, detailed explanations, and the Sunday Live Arena!';
       }
       if (backBtn) {
         backBtn.style.display = 'none';
