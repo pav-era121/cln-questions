@@ -58,8 +58,8 @@ const app = {
           this.renderNavUserArea();
         }
       } catch (err) {
-        // If profile fetch fails due to token invalidation or expiry, clear stale state
-        if (err.message && (err.message.toLowerCase().includes('token') || err.message.toLowerCase().includes('unauthorized') || err.message.toLowerCase().includes('expired'))) {
+        // If profile fetch fails due to token invalidation or expiry, clear stale state (excluding trial expiration)
+        if (err.message && (err.message.toLowerCase().includes('token') || err.message.toLowerCase().includes('unauthorized') || (err.message.toLowerCase().includes('expired') && !err.message.toLowerCase().includes('trial')))) {
           API.clearToken();
           this.state.user = null;
           this.renderNavUserArea();
@@ -224,8 +224,30 @@ const app = {
         this.showView('dashboard');
       }
     } catch (err) {
-      if (err.message && err.message.toLowerCase().includes('suspend')) {
-        errorEl.innerHTML = `${err.message}<br><a href="https://t.me/CLN_AAU_Admin" target="_blank" rel="noopener noreferrer" style="color:#229ED9; font-weight:700; text-decoration:underline; display:inline-block; margin-top:6px;">Contact Admin @CLN_AAU_Admin on Telegram ✈️</a>`;
+      const isTrialExpired = (err.data && err.data.trialExpired) || 
+                             (err.message && (err.message.toLowerCase().includes('trial') || err.message.toLowerCase().includes('72-hour')));
+      const isSuspended = (err.data && err.data.suspended) || 
+                          (err.message && err.message.toLowerCase().includes('suspend'));
+
+      if (isTrialExpired || isSuspended) {
+        // Automatically switch to the packages & payment view
+        this.showView('suspended');
+        this.showToast('Your 3-day free trial has concluded. Please select a semester bundle below.', 'info');
+
+        // Also render rich upgrade card on the login form in case they return to it
+        errorEl.innerHTML = `
+          <div style="background:#fef2f2; border:1.5px solid #f87171; border-radius:10px; padding:14px; text-align:left; margin:6px 0;">
+            <div style="font-weight:800; color:#b91c1c; font-size:0.95rem; margin-bottom:4px; display:flex; align-items:center; gap:6px;">
+              <span>⌛</span> <span>3-Day Free Trial Ended</span>
+            </div>
+            <p style="font-size:0.83rem; color:#4b5563; margin:0 0 10px; line-height:1.4;">
+              Your 72-hour free trial has ended. Select a semester bundle (Solo 380 ETB, Dorm Squad 1,200 ETB, Section Deal 2,000 ETB) and pay via CBE (1000253063452) or Telebirr (0950113361) to activate full access.
+            </p>
+            <button type="button" class="btn btn-primary" onclick="app.showView('suspended')" style="width:100%; font-size:0.85rem; font-weight:700; padding:9px; background:#2563eb;">
+              👑 View Semester Packages & Payment Details →
+            </button>
+          </div>
+        `;
       } else {
         errorEl.innerText = err.message;
       }
@@ -1498,7 +1520,8 @@ const app = {
     const user = this.state.user;
 
     const isSuspended = user && user.status === 'SUSPENDED';
-    const hasActiveTrial = user && !user.isPaid && !isSuspended && (user.hoursLeft > 0 || user.isTrial);
+    const isPaid = user && user.isPaid;
+    const hasActiveTrial = user && !isPaid && !isSuspended && (user.hoursLeft > 0 || user.isTrial);
 
     if (hasActiveTrial) {
       const hours = user.hoursLeft || 0;
@@ -1512,13 +1535,13 @@ const app = {
       if (backBtn) {
         backBtn.style.display = 'block';
       }
-    } else if (isSuspended) {
+    } else if (isSuspended && isPaid) {
       if (iconEl) iconEl.innerText = '🔒';
       if (titleEl) {
         titleEl.innerText = 'Account Suspended';
       }
       if (subEl) {
-        subEl.innerText = 'Your account has been suspended. Choose your preferred semester bundle below and send your payment receipt to @CLN_AAU_Admin on Telegram to reactivate full semester access.';
+        subEl.innerText = 'Your account has been suspended. Please contact @CLN_AAU_Admin on Telegram for assistance.';
       }
       if (backBtn) {
         backBtn.style.display = 'none';

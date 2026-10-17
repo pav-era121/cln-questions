@@ -59,12 +59,24 @@ const API = {
         if (data && data.suspended) {
           window.dispatchEvent(new CustomEvent('cln:user-suspended', { detail: data }));
         }
-        if (response.status === 401 || (response.status === 403 && data && data.error && (data.error.toLowerCase().includes('token') || data.error.toLowerCase().includes('expired')))) {
+
+        // Only trigger auth-expired for actual JWT/token expiry, NOT for trial expiration
+        const isAuthTokenError = response.status === 401 || (
+          response.status === 403 && data && data.error &&
+          (data.error.toLowerCase().includes('token') || data.error.toLowerCase().includes('jwt')) &&
+          !data.trialExpired && !data.error.toLowerCase().includes('trial')
+        );
+
+        if (isAuthTokenError) {
           console.warn('Authentication token expired or invalid. Clearing session storage.');
           this.clearToken();
           window.dispatchEvent(new CustomEvent('cln:auth-expired', { detail: data }));
         }
-        throw new Error(data.error || `Request failed with status ${response.status}`);
+
+        const err = new Error(data.error || `Request failed with status ${response.status}`);
+        err.data = data;
+        err.status = response.status;
+        throw err;
       }
 
       return data;

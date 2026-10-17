@@ -891,7 +891,7 @@
               </svg>
               <span>Send Receipt & Student List to @CLN_AAU_Admin</span>
             </a>
-            <button class="btn btn-secondary" onclick="app.handleLogout()" style="width:100%; max-width:440px;">Log Out & Switch Account</button>
+            <button class="btn btn-secondary" onclick="app.state.user ? app.handleLogout() : app.showView('login')" style="width:100%; max-width:440px; font-weight:700;">← Back to Log In</button>
           </div>
 
         </div>
