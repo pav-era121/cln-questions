@@ -11,69 +11,88 @@ class ArenaEngine {
     this.autoAdvance = true;
     this.autoPilot = true; // Autonomous self-starting & managing engine
     this.masterSchedulerInterval = null;
+    this.initPromise = null;
   }
 
-  async init(database) {
+  init(database) {
     this.db = database;
 
-    try {
-      // 1. Create Tables if they don't exist
-      await this.db.exec(`
-        CREATE TABLE IF NOT EXISTS arena_sessions (
-          id TEXT PRIMARY KEY,
-          title TEXT NOT NULL,
-          course_id TEXT,
-          scheduled_at TEXT NOT NULL,
-          seconds_per_question INTEGER DEFAULT 40,
-          question_ids TEXT NOT NULL,
-          status TEXT DEFAULT 'SCHEDULED',
-          current_question_index INTEGER DEFAULT 0,
-          current_question_started_at INTEGER DEFAULT 0,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        );
+    if (!this.initPromise) {
+      this.initPromise = (async () => {
+        try {
+          // 1. Create Tables if they don't exist
+          await this.db.exec(`
+            CREATE TABLE IF NOT EXISTS arena_sessions (
+              id TEXT PRIMARY KEY,
+              title TEXT NOT NULL,
+              course_id TEXT,
+              scheduled_at TEXT NOT NULL,
+              seconds_per_question INTEGER DEFAULT 40,
+              question_ids TEXT NOT NULL,
+              status TEXT DEFAULT 'SCHEDULED',
+              current_question_index INTEGER DEFAULT 0,
+              current_question_started_at INTEGER DEFAULT 0,
+              created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
 
-        CREATE TABLE IF NOT EXISTS arena_participants (
-          session_id TEXT NOT NULL,
-          user_id TEXT NOT NULL,
-          user_name TEXT NOT NULL,
-          joined_at INTEGER NOT NULL,
-          total_score INTEGER DEFAULT 0,
-          total_time_ms INTEGER DEFAULT 0,
-          answers TEXT DEFAULT '{}',
-          PRIMARY KEY (session_id, user_id)
-        );
+            CREATE TABLE IF NOT EXISTS arena_participants (
+              session_id TEXT NOT NULL,
+              user_id TEXT NOT NULL,
+              user_name TEXT NOT NULL,
+              joined_at INTEGER NOT NULL,
+              total_score INTEGER DEFAULT 0,
+              total_time_ms INTEGER DEFAULT 0,
+              answers TEXT DEFAULT '{}',
+              PRIMARY KEY (session_id, user_id)
+            );
 
-        CREATE TABLE IF NOT EXISTS arena_questions (
-          id TEXT PRIMARY KEY,
-          session_id TEXT NOT NULL,
-          question_order INTEGER DEFAULT 1,
-          question_text TEXT NOT NULL,
-          image_url TEXT,
-          option_a TEXT NOT NULL,
-          option_b TEXT NOT NULL,
-          option_c TEXT DEFAULT '',
-          option_d TEXT DEFAULT '',
-          correct_answer TEXT NOT NULL,
-          explanation TEXT DEFAULT '',
-          difficulty TEXT DEFAULT 'Medium',
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        );
-      `);
+            CREATE TABLE IF NOT EXISTS arena_questions (
+              id TEXT PRIMARY KEY,
+              session_id TEXT NOT NULL,
+              question_order INTEGER DEFAULT 1,
+              question_text TEXT NOT NULL,
+              image_url TEXT,
+              option_a TEXT NOT NULL,
+              option_b TEXT NOT NULL,
+              option_c TEXT DEFAULT '',
+              option_d TEXT DEFAULT '',
+              correct_answer TEXT NOT NULL,
+              explanation TEXT DEFAULT '',
+              difficulty TEXT DEFAULT 'Medium',
+              created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+          `);
 
-      // 2. Load latest active, lobby, or scheduled session
+          // 2. Load latest active, lobby, or scheduled session
+          await this.loadActiveSession();
+
+          // 3. If no session exists, initialize an upcoming Sunday Arena
+          if (!this.activeSession) {
+            await this.ensureUpcomingSundaySession();
+          }
+
+          // 4. Launch Autonomous Master Scheduler
+          this.startMasterScheduler();
+
+          console.log('✅ Arena Engine initialized successfully with Autonomous Auto-Pilot active.');
+        } catch (err) {
+          console.error('❌ Arena Engine initialization error:', err.message);
+        }
+      })();
+    }
+
+    return this.initPromise;
+  }
+
+  async ensureReady() {
+    if (this.initPromise) {
+      await this.initPromise;
+    }
+    if (!this.activeSession) {
       await this.loadActiveSession();
-
-      // 3. If no session exists, initialize an upcoming Sunday Arena
       if (!this.activeSession) {
         await this.ensureUpcomingSundaySession();
       }
-
-      // 4. Launch Autonomous Master Scheduler
-      this.startMasterScheduler();
-
-      console.log('✅ Arena Engine initialized successfully with Autonomous Auto-Pilot active.');
-    } catch (err) {
-      console.error('❌ Arena Engine initialization error:', err.message);
     }
   }
 
@@ -279,7 +298,7 @@ class ArenaEngine {
         session = await this.db.prepare(`
           SELECT * FROM arena_sessions 
           WHERE status = 'SCHEDULED' AND scheduled_at >= ?
-          ORDER BY scheduled_at ASC LIMIT 1
+          ORDER BY scheduled_at ASC, created_at DESC LIMIT 1
         `).get(new Date(Date.now() - 30 * 60 * 1000).toISOString());
       }
 

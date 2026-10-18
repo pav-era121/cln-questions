@@ -1373,8 +1373,9 @@ app.post('/api/admin/upload', authenticateToken, requireAdmin, upload.single('im
 // ==========================================
 
 // Get current live or scheduled arena state
-app.get('/api/arena/current', optionalAuthenticateToken, (req, res) => {
+app.get('/api/arena/current', optionalAuthenticateToken, async (req, res) => {
   try {
+    await arenaEngine.ensureReady();
     const isAdmin = req.user && req.user.email === 'admin@cln.edu.et';
     const state = arenaEngine.getPublicState(req.user, isAdmin);
     res.json(state);
@@ -1386,6 +1387,7 @@ app.get('/api/arena/current', optionalAuthenticateToken, (req, res) => {
 // Join the arena lobby
 app.post('/api/arena/join', authenticateToken, verifyActiveUser, async (req, res) => {
   try {
+    await arenaEngine.ensureReady();
     const { sessionId } = req.body;
     const result = await arenaEngine.joinSession(sessionId, req.user);
     res.json(result);
@@ -1397,6 +1399,7 @@ app.post('/api/arena/join', authenticateToken, verifyActiveUser, async (req, res
 // Submit answer for active question
 app.post('/api/arena/submit', authenticateToken, verifyActiveUser, async (req, res) => {
   try {
+    await arenaEngine.ensureReady();
     const { sessionId, questionIndex, answerKey } = req.body;
     if (!sessionId || questionIndex === undefined || !answerKey) {
       return res.status(400).json({ error: 'sessionId, questionIndex, and answerKey are required.' });
@@ -1409,8 +1412,9 @@ app.post('/api/arena/submit', authenticateToken, verifyActiveUser, async (req, r
 });
 
 // Get leaderboard for a session
-app.get('/api/arena/leaderboard/:sessionId', (req, res) => {
+app.get('/api/arena/leaderboard/:sessionId', async (req, res) => {
   try {
+    await arenaEngine.ensureReady();
     const leaderboard = arenaEngine.getLeaderboard();
     res.json({ leaderboard });
   } catch (err) {
@@ -1421,6 +1425,7 @@ app.get('/api/arena/leaderboard/:sessionId', (req, res) => {
 // Admin Arena Status Controller (LOBBY, ACTIVE, NEXT, ENDED)
 app.post('/api/admin/arena/status', authenticateToken, requireAdmin, async (req, res) => {
   try {
+    await arenaEngine.ensureReady();
     const { action, status } = req.body;
     if (action === 'NEXT') {
       await arenaEngine.advanceNextQuestion();
@@ -1437,6 +1442,7 @@ app.post('/api/admin/arena/status', authenticateToken, requireAdmin, async (req,
 // Admin Create/Schedule New Arena Session
 app.post('/api/admin/arena/create', authenticateToken, requireAdmin, async (req, res) => {
   try {
+    await arenaEngine.ensureReady();
     const { title, courseId, scheduledAt, secondsPerQuestion, questionCount } = req.body;
     const result = await arenaEngine.adminCreateSession({
       title,
@@ -1452,8 +1458,9 @@ app.post('/api/admin/arena/create', authenticateToken, requireAdmin, async (req,
 });
 
 // Admin Live Monitor Data
-app.get('/api/admin/arena/monitor', authenticateToken, requireAdmin, (req, res) => {
+app.get('/api/admin/arena/monitor', authenticateToken, requireAdmin, async (req, res) => {
   try {
+    await arenaEngine.ensureReady();
     const state = arenaEngine.getPublicState(req.user, true);
     res.json(state);
   } catch (err) {
