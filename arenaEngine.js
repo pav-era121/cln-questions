@@ -802,6 +802,14 @@ class ArenaEngine {
       if (expMatch) {
         explanation = expMatch[1].trim();
         explanation = explanation.replace(/^\*{1,2}\s*/, '').replace(/\*{1,2}$/, '').replace(/\n\s*---\s*$/, '').trim();
+      } else if (ansMatch) {
+        // Also support inline explanations directly attached via dash: "**✅ Correct Answer: A** — explanation"
+        const afterAns = rest.substring(ansMatch.index + ansMatch[0].length);
+        const inlineExpMatch = afterAns.match(/^\*{0,2}\s*[\-—–:]\s*([\s\S]*)$/);
+        if (inlineExpMatch) {
+          explanation = inlineExpMatch[1].trim();
+          explanation = explanation.replace(/^\*{1,2}\s*/, '').replace(/\*{1,2}$/, '').replace(/\n\s*---\s*$/, '').trim();
+        }
       }
 
       let optionsPart = rest;
