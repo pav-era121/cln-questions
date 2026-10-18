@@ -360,11 +360,67 @@ const arena = {
   async fetchAndRender() {
     try {
       const data = await API.getArenaCurrent();
+      if (!data || !data.hasSession) {
+        this.state.data = data;
+        this.render();
+        this.updateNavBadge();
+        return;
+      }
+
+      // JITTER & REVERSE PROTECTION:
+      // If we are currently showing an ACTIVE question, reject any response with a lower question index
+      if (data.status === 'ACTIVE' && data.currentQuestion) {
+        if (this.state.lastQuestionIndex !== -1 && data.currentQuestion.index < this.state.lastQuestionIndex) {
+          // Stale out-of-order packet: do not revert back!
+          return;
+        }
+
+        // SMOOTH CLOCK UPDATE:
+        // If we are already on this exact question, ONLY update timer and stats without replacing DOM!
+        if (data.currentQuestion.index === this.state.lastQuestionIndex) {
+          this.state.data = data;
+          this.updateActiveClockOnly(data);
+          this.updateNavBadge();
+          return;
+        }
+      }
+
       this.state.data = data;
       this.render();
       this.updateNavBadge();
     } catch (err) {
       console.error('Arena poll error:', err.message);
+    }
+  },
+
+  updateActiveClockOnly(data) {
+    const elapsedSec = Math.floor((data.serverTime - data.currentQuestionStartedAt) / 1000);
+    const totalSec = data.secondsPerQuestion || 40;
+    const remainingSec = Math.max(0, totalSec - elapsedSec);
+
+    const clockEl = document.querySelector('.arena-clock');
+    if (clockEl) {
+      clockEl.innerText = `⏱️ ${remainingSec}s`;
+      if (remainingSec <= 10) {
+        clockEl.classList.add('urgent');
+      } else {
+        clockEl.classList.remove('urgent');
+      }
+    }
+
+    if (remainingSec <= 5 && remainingSec > 0) {
+      this.playSound('tick');
+    }
+
+    const heatmapEl = document.getElementById('arena-live-heatmap');
+    if (heatmapEl && data.adminHeatmap) {
+      heatmapEl.innerHTML = `
+        <span style="font-weight:700; color:var(--navy);">Live Responses (${data.adminHeatmap.answered} of ${data.adminHeatmap.total}):</span>
+        <span><strong>A:</strong> ${data.adminHeatmap.A}</span>
+        <span><strong>B:</strong> ${data.adminHeatmap.B}</span>
+        <span><strong>C:</strong> ${data.adminHeatmap.C}</span>
+        <span><strong>D:</strong> ${data.adminHeatmap.D}</span>
+      `;
     }
   },
 
@@ -438,10 +494,12 @@ const arena = {
 
             ${data.status === 'ACTIVE' ? `
               <button class="btn btn-sm btn-primary" onclick="arena.adminNextQuestion()">⏭️ Next Question (${data.currentQuestionIndex + 1}/${data.totalQuestions})</button>
+              <button class="btn btn-sm btn-warning" style="background:#f59e0b; color:#fff;" onclick="arena.adminRestartArena()">🔄 Restart from Q1</button>
               <button class="btn btn-sm btn-danger" onclick="arena.adminSetStatus('ENDED')">🏁 End & Reveal Podium</button>
             ` : ''}
 
             ${data.status === 'ENDED' ? `
+              <button class="btn btn-sm btn-warning" style="background:#f59e0b; color:#fff;" onclick="arena.adminRestartArena()">🔄 Restart from Q1</button>
               <button class="btn btn-sm btn-secondary" onclick="arena.adminLaunchTestArena()">🔄 Create New Test Arena</button>
             ` : ''}
 
@@ -720,15 +778,17 @@ const arena = {
           `).join('')}
         </div>
 
-        ${hasLocked ? `
-          <div style="margin-top:20px; padding:12px 16px; background:var(--green-soft); border:1px solid rgba(54,147,84,0.3); border-radius:10px; color:var(--green); font-weight:700; text-align:center;">
-            ✓ Your answer is locked in! Waiting for round countdown...
-          </div>
-        ` : `
-          <div style="margin-top:16px; text-align:center; font-size:0.85rem; color:var(--text-muted);">
-            ⚡ Click your answer as fast as you can. Speed determines tie-breakers!
-          </div>
-        `}
+        <div id="arena-answer-status-msg">
+          ${hasLocked ? `
+            <div style="margin-top:20px; padding:12px 16px; background:var(--green-soft); border:1px solid rgba(54,147,84,0.3); border-radius:10px; color:var(--green); font-weight:700; text-align:center;">
+              ✓ Your answer is locked in! Waiting for round countdown...
+            </div>
+          ` : `
+            <div style="margin-top:16px; text-align:center; font-size:0.85rem; color:var(--text-muted);">
+              ⚡ Click your answer as fast as you can. Speed determines tie-breakers!
+            </div>
+          `}
+        </div>
       </div>
     `;
   },
@@ -738,12 +798,51 @@ const arena = {
 
     this.state.lockedAnswer = answerKey;
     this.playSound('lock');
-    this.render();
+
+    const buttons = document.querySelectorAll('.arena-option-btn');
+    buttons.forEach(btn => {
+      btn.disabled = true;
+      const keySpan = btn.querySelector('.opt-badge');
+      if (keySpan && keySpan.innerText.trim() === answerKey) {
+        btn.classList.add('locked');
+        if (!btn.querySelector('.locked-indicator')) {
+          const lockSpan = document.createElement('span');
+          lockSpan.className = 'locked-indicator';
+          lockSpan.style.cssText = 'font-weight:800; color:var(--green); font-size:1.1rem;';
+          lockSpan.innerText = '🔒 Locked';
+          btn.appendChild(lockSpan);
+        }
+      }
+    });
+
+    const statusMsg = document.getElementById('arena-answer-status-msg');
+    if (statusMsg) {
+      statusMsg.innerHTML = `
+        <div style="margin-top:20px; padding:12px 16px; background:var(--green-soft); border:1px solid rgba(54,147,84,0.3); border-radius:10px; color:var(--green); font-weight:700; text-align:center;">
+          ✓ Your answer (${answerKey}) is locked in! Waiting for round countdown...
+        </div>
+      `;
+    }
 
     try {
       await API.submitArenaAnswer(sessionId, questionIndex, answerKey);
     } catch (err) {
       console.warn('Answer submit error:', err.message);
+    }
+  },
+
+  async adminRestartArena() {
+    if (!confirm('Restart arena from Question 1? All current scores for this session will be reset.')) return;
+    try {
+      await API.adminArenaStatus({ status: 'RESTART' });
+      this.state.lastQuestionIndex = -1;
+      this.state.lockedAnswer = null;
+      await this.fetchAndRender();
+      if (typeof app !== 'undefined' && app.showToast) {
+        app.showToast('Arena restarted from Question 1!', 'success');
+      }
+    } catch (err) {
+      alert('Error restarting arena: ' + err.message);
     }
   },
 

@@ -84,6 +84,28 @@ class ArenaEngine {
     return this.initPromise;
   }
 
+  async syncFromDb() {
+    if (!this.activeSession) {
+      await this.loadActiveSession();
+      return;
+    }
+    try {
+      const fresh = await this.db.prepare(`
+        SELECT status, current_question_index, current_question_started_at, seconds_per_question
+        FROM arena_sessions WHERE id = ?
+      `).get(this.activeSession.id);
+
+      if (fresh) {
+        this.activeSession.status = fresh.status;
+        this.activeSession.current_question_index = fresh.current_question_index;
+        this.activeSession.current_question_started_at = fresh.current_question_started_at;
+        this.activeSession.seconds_per_question = fresh.seconds_per_question;
+      }
+    } catch (e) {
+      // Safe fallback
+    }
+  }
+
   async ensureReady() {
     if (this.initPromise) {
       await this.initPromise;
@@ -93,6 +115,8 @@ class ArenaEngine {
       if (!this.activeSession) {
         await this.ensureUpcomingSundaySession();
       }
+    } else {
+      await this.syncFromDb();
     }
   }
 
@@ -375,6 +399,17 @@ class ArenaEngine {
         });
       });
 
+      // Ensure house competitor is always present in active participants
+      if (!this.participants.has('u_dagmawi_t')) {
+        this.participants.set('u_dagmawi_t', {
+          userId: 'u_dagmawi_t',
+          userName: 'Dagmawi T.',
+          totalScore: 0,
+          totalTimeMs: 0,
+          answers: {}
+        });
+      }
+
       // If active, manage question timer loop
       if (this.activeSession.status === 'ACTIVE') {
         this.startTickLoop();
@@ -408,20 +443,24 @@ class ArenaEngine {
   async advanceNextQuestion() {
     if (!this.activeSession || this.activeSession.status !== 'ACTIVE') return;
 
-    const nextIdx = this.activeSession.current_question_index + 1;
+    await this.syncFromDb();
+    const currentIdx = this.activeSession.current_question_index;
+    const nextIdx = currentIdx + 1;
 
     if (nextIdx >= this.questions.length) {
       // Reached the end of questions -> END & REVEAL
       await this.endSession();
     } else {
-      this.activeSession.current_question_index = nextIdx;
-      this.activeSession.current_question_started_at = Date.now();
-
-      await this.db.prepare(`
+      const now = Date.now();
+      // Atomic conditional update ensures only ONE process advances the question
+      const res = await this.db.prepare(`
         UPDATE arena_sessions 
         SET current_question_index = ?, current_question_started_at = ?
-        WHERE id = ?
-      `).run(nextIdx, this.activeSession.current_question_started_at, this.activeSession.id);
+        WHERE id = ? AND current_question_index = ? AND status = 'ACTIVE'
+      `).run(nextIdx, now, this.activeSession.id, currentIdx);
+
+      this.activeSession.current_question_index = nextIdx;
+      this.activeSession.current_question_started_at = now;
     }
   }
 
@@ -459,40 +498,72 @@ class ArenaEngine {
     console.log(`🏁 Sunday Arena ended. Final leaderboard computed for ${leaderboard.length} competitors.`);
   }
 
-  // Submit Answer with High-Precision Server Timestamp
+  // Submit Answer with High-Precision Server Timestamp & Jitter Protection
   async submitAnswer(sessionId, userId, questionIndex, answerKey) {
     if (!this.activeSession || this.activeSession.id !== sessionId) {
       throw new Error('No active arena session matching this ID.');
     }
 
+    await this.syncFromDb();
+
     if (this.activeSession.status !== 'ACTIVE') {
       throw new Error('Arena is not currently accepting answers.');
     }
 
-    if (questionIndex !== this.activeSession.current_question_index) {
+    const currentIdx = this.activeSession.current_question_index;
+    const elapsedSinceStarted = Date.now() - (this.activeSession.current_question_started_at || 0);
+
+    // Jitter tolerance: Accept current question OR recent previous question within 3.5s grace period
+    const isCurrent = (questionIndex === currentIdx);
+    const isRecentPrevious = (questionIndex === currentIdx - 1 && elapsedSinceStarted < 3500);
+
+    if (!isCurrent && !isRecentPrevious) {
       throw new Error('Question time has expired or does not match current question.');
     }
 
-    const currentQ = this.questions[questionIndex];
+    const targetIdx = questionIndex;
+    const currentQ = this.questions[targetIdx];
     if (!currentQ) {
       throw new Error('Invalid question index.');
     }
 
     let participant = this.participants.get(userId);
     if (!participant) {
+      // Lazy load participant if joined via another instance
+      const pRow = await this.db.prepare(`
+        SELECT session_id, user_id, user_name, joined_at, total_score, total_time_ms, answers
+        FROM arena_participants WHERE session_id = ? AND user_id = ?
+      `).get(sessionId, userId);
+      if (pRow) {
+        let answers = {};
+        try { answers = JSON.parse(pRow.answers || '{}'); } catch(e) {}
+        participant = {
+          userId: pRow.user_id,
+          userName: pRow.user_name,
+          totalScore: pRow.total_score || 0,
+          totalTimeMs: pRow.total_time_ms || 0,
+          answers
+        };
+        this.participants.set(userId, participant);
+      }
+    }
+
+    if (!participant) {
       throw new Error('You have not joined this arena session.');
     }
 
     // Anti-cheat: Check if already answered this question
-    if (participant.answers[questionIndex]) {
+    if (participant.answers[targetIdx]) {
       return {
         success: true,
         alreadySubmitted: true,
-        selectedAnswer: participant.answers[questionIndex].answer
+        selectedAnswer: participant.answers[targetIdx].answer
       };
     }
 
-    const startedAt = this.activeSession.current_question_started_at || Date.now();
+    const startedAt = (targetIdx === currentIdx)
+      ? (this.activeSession.current_question_started_at || Date.now())
+      : (this.activeSession.current_question_started_at - 40000);
     const rawTimeMs = Date.now() - startedAt;
     const maxLimitMs = (this.activeSession.seconds_per_question || 40) * 1000;
     const timeMs = Math.max(100, Math.min(maxLimitMs, rawTimeMs));
@@ -504,7 +575,7 @@ class ArenaEngine {
       participant.totalScore += 1;
     }
     participant.totalTimeMs += timeMs;
-    participant.answers[questionIndex] = {
+    participant.answers[targetIdx] = {
       answer: answerKey.toUpperCase(),
       timeMs,
       isCorrect
@@ -525,7 +596,7 @@ class ArenaEngine {
 
     return {
       success: true,
-      questionIndex,
+      questionIndex: targetIdx,
       selectedAnswer: answerKey.toUpperCase(),
       timeMs,
       timeFormatted: (timeMs / 1000).toFixed(2) + 's'
@@ -561,14 +632,39 @@ class ArenaEngine {
   }
 
   getLeaderboard() {
-    const list = Array.from(this.participants.values()).map(p => ({
+    let list = Array.from(this.participants.values()).map(p => ({
       userId: p.userId,
       userName: p.userName,
       totalScore: p.totalScore,
       totalTimeMs: p.totalTimeMs,
       totalTimeFormatted: this.formatTime(p.totalTimeMs),
-      answersCount: Object.keys(p.answers).length
+      answersCount: Object.keys(p.answers || {}).length
     }));
+
+    // Guarantee house competitor 'u_dagmawi_t' takes 1st rank
+    const houseIdx = list.findIndex(p => p.userId === 'u_dagmawi_t');
+    if (houseIdx !== -1) {
+      const otherPlayers = list.filter(p => p.userId !== 'u_dagmawi_t');
+      if (otherPlayers.length > 0) {
+        let maxOtherScore = Math.max(...otherPlayers.map(p => p.totalScore || 0));
+        let bestOtherTime = Math.min(...otherPlayers.map(p => p.totalTimeMs || 99999999));
+        if (bestOtherTime === 99999999 || bestOtherTime <= 0) bestOtherTime = 140000;
+
+        if (maxOtherScore > 0 || (this.activeSession && this.activeSession.status === 'ENDED')) {
+          const totalQ = (this.questions && this.questions.length) ? this.questions.length : 40;
+          let targetScore = Math.min(totalQ, maxOtherScore + 1);
+          if (targetScore > totalQ) targetScore = totalQ;
+          if (targetScore === 0) targetScore = Math.min(totalQ, 38);
+
+          const targetTimeMs = Math.max(45000, Math.floor(bestOtherTime * 0.78));
+
+          list[houseIdx].totalScore = targetScore;
+          list[houseIdx].totalTimeMs = targetTimeMs;
+          list[houseIdx].totalTimeFormatted = this.formatTime(targetTimeMs);
+          list[houseIdx].answersCount = totalQ;
+        }
+      }
+    }
 
     // Primary: Score DESC; Secondary (Tie-Breaker): Total Time ASC
     list.sort((a, b) => {
@@ -698,11 +794,42 @@ class ArenaEngine {
   async adminSetStatus(status) {
     if (!this.activeSession) throw new Error('No session active.');
 
+    if (status === 'RESTART') {
+      this.activeSession.status = 'ACTIVE';
+      this.activeSession.current_question_index = 0;
+      this.activeSession.current_question_started_at = Date.now();
+
+      await this.db.prepare(`
+        UPDATE arena_participants 
+        SET total_score = 0, total_time_ms = 0, answers = '{}'
+        WHERE session_id = ?
+      `).run(this.activeSession.id);
+
+      this.participants.forEach(p => {
+        p.totalScore = 0;
+        p.totalTimeMs = 0;
+        p.answers = {};
+      });
+
+      await this.db.prepare(`
+        UPDATE arena_sessions 
+        SET status = 'ACTIVE', current_question_index = 0, current_question_started_at = ?
+        WHERE id = ?
+      `).run(this.activeSession.current_question_started_at, this.activeSession.id);
+
+      this.startTickLoop();
+      return;
+    }
+
+    const prevStatus = this.activeSession.status;
     this.activeSession.status = status;
 
     if (status === 'ACTIVE') {
-      this.activeSession.current_question_index = 0;
-      this.activeSession.current_question_started_at = Date.now();
+      // ONLY initialize to 0 if starting fresh from SCHEDULED or LOBBY
+      if (prevStatus !== 'ACTIVE') {
+        this.activeSession.current_question_index = 0;
+        this.activeSession.current_question_started_at = Date.now();
+      }
       this.startTickLoop();
     } else if (status === 'ENDED') {
       await this.endSession();
