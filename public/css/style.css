@@ -1651,3 +1651,9 @@ body {
 }
 
 
+
+/* Hide Sunday Live Arena floating button during quizzes */
+body.in-quiz-mode .arena-sidebar-trigger,
+body.in-quiz-mode #arena-sidebar-trigger {
+  display: none !important;
+}

@@ -143,7 +143,15 @@ const app = {
     }
     const sideTrigger = document.getElementById('arena-sidebar-trigger');
     if (sideTrigger) {
-      sideTrigger.style.display = viewName === 'arena' ? 'none' : 'flex';
+      sideTrigger.style.display = (viewName === 'arena' || viewName === 'quiz') ? 'none' : 'flex';
+    }
+    if (viewName === 'quiz') {
+      document.body.classList.add('in-quiz-mode');
+    } else {
+      document.body.classList.remove('in-quiz-mode');
+    }
+    if (viewName !== 'suspended') {
+      this.state.justRegistered = false;
     }
 
     // View specific logic
@@ -197,8 +205,10 @@ const app = {
     try {
       const res = await API.register(fullName, email, phone, password, marketingConsent);
       this.state.user = res.user;
+      this.state.justRegistered = true;
       this.renderNavUserArea();
-      this.showView('courses');
+      this.showView('suspended');
+      this.showToast(`Welcome, ${res.user.fullName}! Choose a semester package or start your 3-day free trial.`, 'success');
     } catch (err) {
       errorEl.innerText = err.message;
       errorEl.style.display = 'block';
@@ -1517,6 +1527,7 @@ const app = {
     const subEl = document.getElementById('suspended-subtitle');
     const iconEl = document.getElementById('suspended-icon');
     const backBtn = document.getElementById('btn-back-to-courses');
+    const topActions = document.getElementById('trial-active-top-actions');
     const user = this.state.user;
 
     const isSuspended = user && user.status === 'SUSPENDED';
@@ -1524,16 +1535,29 @@ const app = {
     const hasActiveTrial = user && !isPaid && !isSuspended && (user.hoursLeft > 0 || user.isTrial);
 
     if (hasActiveTrial) {
-      const hours = user.hoursLeft || 0;
-      if (iconEl) iconEl.innerText = '⏳';
+      const hours = user.hoursLeft || 72;
+      const isJustReg = this.state.justRegistered;
+      if (iconEl) iconEl.innerText = isJustReg ? '🎉' : '⏳';
       if (titleEl) {
-        titleEl.innerHTML = `Active 3-Day Free Trial <span style="display:block; font-size:1.25rem; color:#16a34a; margin-top:6px; font-weight:700;">(${hours} Hours Remaining)</span>`;
+        if (isJustReg) {
+          titleEl.innerHTML = `Welcome to CLN Questions! <span style="display:block; font-size:1.25rem; color:#16a34a; margin-top:6px; font-weight:700;">Your 3-Day Free Trial is Active (${hours}h Remaining)</span>`;
+        } else {
+          titleEl.innerHTML = `Active 3-Day Free Trial <span style="display:block; font-size:1.25rem; color:#16a34a; margin-top:6px; font-weight:700;">(${hours} Hours Remaining)</span>`;
+        }
       }
       if (subEl) {
-        subEl.innerHTML = `Your 72-hour free trial is currently <strong>active</strong> with full quiz access! You can choose any of the <strong>1-semester bundles below</strong> at any time to upgrade early and avoid interruptions once your trial ends.`;
+        if (isJustReg) {
+          subEl.innerHTML = `Your student account is active with <strong>${hours} hours of full access</strong> to all courses, chapters, and the Sunday Arena! Choose a semester package below to lock in full semester access, or click the button below to start practicing with your free trial immediately.`;
+        } else {
+          subEl.innerHTML = `Your 72-hour free trial is currently <strong>active</strong> with full quiz access! You can choose any of the <strong>1-semester bundles below</strong> at any time to upgrade early and avoid interruptions once your trial ends.`;
+        }
+      }
+      if (topActions) {
+        topActions.style.display = 'block';
       }
       if (backBtn) {
-        backBtn.style.display = 'block';
+        backBtn.style.display = 'inline-flex';
+        backBtn.innerHTML = `🚀 Continue with 3-Day Free Trial (Start Practicing) →`;
       }
     } else if (isSuspended && isPaid) {
       if (iconEl) iconEl.innerText = '🔒';
@@ -1542,6 +1566,9 @@ const app = {
       }
       if (subEl) {
         subEl.innerText = 'Your account has been suspended. Please contact @CLN_AAU_Admin on Telegram for assistance.';
+      }
+      if (topActions) {
+        topActions.style.display = 'none';
       }
       if (backBtn) {
         backBtn.style.display = 'none';
@@ -1553,6 +1580,9 @@ const app = {
       }
       if (subEl) {
         subEl.innerText = 'Your 72-hour free trial has concluded. Select a semester bundle below to unlock full semester access to all course questions, detailed explanations, and the Sunday Live Arena!';
+      }
+      if (topActions) {
+        topActions.style.display = 'none';
       }
       if (backBtn) {
         backBtn.style.display = 'none';

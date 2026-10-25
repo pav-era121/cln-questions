@@ -22,6 +22,12 @@ const quizEngine = {
       this.startTimer();
 
       // Render quiz UI
+      document.body.classList.add('in-quiz-mode');
+      const sideTrigger = document.getElementById('arena-sidebar-trigger');
+      if (sideTrigger) sideTrigger.style.display = 'none';
+      if (typeof arena !== 'undefined' && arena.toggleSidebar) {
+        arena.toggleSidebar(false);
+      }
       app.showView('quiz');
       this.renderQuestion();
       this.renderNavGrid();
@@ -203,6 +209,7 @@ const quizEngine = {
 
   async submitQuiz() {
     this.stopTimer();
+    document.body.classList.remove('in-quiz-mode');
 
     try {
       const results = await API.submitQuiz(this.quiz.id, this.attemptId, this.userAnswers);
