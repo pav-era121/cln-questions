@@ -296,6 +296,7 @@ const app = {
       <div class="course-card">
         <img class="course-img" src="${c.image_url || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500'}" alt="${c.name}">
         <div class="course-body">
+          ${c.is_private === 1 ? `<div style="margin-bottom:6px;"><span style="background:rgba(124, 58, 237, 0.12); color:#7c3aed; border:1px solid rgba(124, 58, 237, 0.3); font-size:0.72rem; padding:3px 8px; border-radius:999px; font-weight:700; display:inline-flex; align-items:center; gap:4px;">🔒 Private (Admin Only)</span></div>` : ''}
           <h3 class="course-title">${c.name}</h3>
           <p class="course-desc">${c.description}</p>
           <div class="course-meta">
@@ -319,6 +320,7 @@ const app = {
       <div class="course-card">
         <img class="course-img" src="${c.image_url || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500'}" alt="${c.name}">
         <div class="course-body">
+          ${c.is_private === 1 ? `<div style="margin-bottom:6px;"><span style="background:rgba(124, 58, 237, 0.12); color:#7c3aed; border:1px solid rgba(124, 58, 237, 0.3); font-size:0.72rem; padding:3px 8px; border-radius:999px; font-weight:700; display:inline-flex; align-items:center; gap:4px;">🔒 Private (Admin Only)</span></div>` : ''}
           <h3 class="course-title">${c.name}</h3>
           <p class="course-desc">${c.description}</p>
           <div class="course-meta">
@@ -342,7 +344,7 @@ const app = {
       headerEl.innerHTML = `
         <img src="${c.image_url || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500'}" style="width:120px; height:120px; object-fit:cover; border-radius:12px;" alt="${this.escapeHtml(c.name)}">
         <div style="flex:1;">
-          <span class="brand-badge">FRESHMAN COURSE</span>
+          <span class="brand-badge" style="${c.is_private === 1 ? 'background:#7c3aed; color:#fff;' : ''}">${c.is_private === 1 ? '🔒 PRIVATE ADVANCED COURSE • MEng 31xx' : 'FRESHMAN COURSE'}</span>
           <h2 style="font-size:1.8rem; font-weight:800; margin:6px 0;">${this.escapeHtml(c.name)}</h2>
           <p style="opacity:0.9; font-size:0.95rem;">${this.escapeHtml(c.description)}</p>
         </div>

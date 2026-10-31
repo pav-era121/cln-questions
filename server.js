@@ -66,6 +66,11 @@ app.use(express.static(path.join(__dirname, 'public')));
   } catch (e) {
     // Column already exists, safe to ignore
   }
+  try {
+    await db.exec('ALTER TABLE courses ADD COLUMN is_private INTEGER DEFAULT 0;');
+  } catch (e) {
+    // Column already exists, safe to ignore
+  }
 })();
 
 // Multer Storage Engine
@@ -233,9 +238,15 @@ async function verifyActiveUser(req, res, next) {
   }
 }
 
+// Helper: Check if user is system admin
+function isUserAdmin(user) {
+  if (!user || !user.email) return false;
+  return user.email === 'admin@cln.edu.et' || user.email === 'eyoba7619@gmail.com';
+}
+
 // Admin Authorization Middleware
 function requireAdmin(req, res, next) {
-  if (req.user.email !== 'admin@cln.edu.et') {
+  if (!isUserAdmin(req.user)) {
     return res.status(403).json({ error: 'Admin authorization required.' });
   }
   next();
@@ -469,16 +480,27 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
 // 2. PUBLIC & STUDENT COURSE/QUIZ ENDPOINTS
 // ==========================================
 
-app.get('/api/courses', async (req, res) => {
+app.get('/api/courses', optionalAuthenticateToken, async (req, res) => {
   try {
-    const courses = await db.prepare(`
+    const isAdmin = isUserAdmin(req.user);
+    let sql = `
       SELECT c.*, COUNT(ch.id) AS chapter_count
       FROM courses c
       LEFT JOIN chapters ch ON c.id = ch.course_id AND ch.status = 'ACTIVE' AND ch.id != 'ch_arena'
       WHERE c.status = 'ACTIVE' AND c.id != 'c_arena' AND c.id NOT LIKE 'c_arena%'
+    `;
+
+    // Strict Privacy: Only administrators can see and access private courses (e.g. Manufacturing Engineering II)
+    if (!isAdmin) {
+      sql += ` AND (c.is_private = 0 OR c.is_private IS NULL) `;
+    }
+
+    sql += `
       GROUP BY c.id
       ORDER BY c.created_at ASC
-    `).all();
+    `;
+
+    const courses = await db.prepare(sql).all();
 
     res.json({ courses });
   } catch (err) {
@@ -495,6 +517,13 @@ app.get('/api/courses/:id', optionalAuthenticateToken, async (req, res) => {
     const course = await db.prepare("SELECT * FROM courses WHERE id = ? AND status = 'ACTIVE'").get(req.params.id);
     if (!course) return res.status(404).json({ error: 'Course not found.' });
 
+    const isAdmin = isUserAdmin(req.user);
+
+    // Strict Privacy: Private courses can only be accessed by admin
+    if (course.is_private === 1 && !isAdmin) {
+      return res.status(404).json({ error: 'Course not found.' });
+    }
+
     const rawChapters = await db.prepare(`
       SELECT ch.*, COUNT(q.id) AS quiz_count
       FROM chapters ch
@@ -503,8 +532,6 @@ app.get('/api/courses/:id', optionalAuthenticateToken, async (req, res) => {
       GROUP BY ch.id
       ORDER BY ch.chapter_order ASC
     `).all(req.params.id);
-
-    const isAdmin = req.user && (req.user.email === 'admin@cln.edu.et' || req.user.email === 'eyoba7619@gmail.com');
 
     // Collect completion records for student in this course
     let completedChapterMap = new Map();
@@ -591,7 +618,12 @@ app.get('/api/chapters/:id', optionalAuthenticateToken, async (req, res) => {
 
     const course = await db.prepare("SELECT * FROM courses WHERE id = ?").get(chapter.course_id);
 
-    const isAdmin = req.user && (req.user.email === 'admin@cln.edu.et' || req.user.email === 'eyoba7619@gmail.com');
+    const isAdmin = isUserAdmin(req.user);
+
+    // Strict Privacy: Private courses can only be accessed by admin
+    if (course && course.is_private === 1 && !isAdmin) {
+      return res.status(404).json({ error: 'Chapter not found.' });
+    }
 
     // Check if this chapter itself is unlocked
     let isChapterUnlocked = false;
@@ -709,7 +741,12 @@ app.get('/api/quizzes/:id/start', authenticateToken, verifyActiveUser, async (re
 
     const course = await db.prepare('SELECT * FROM courses WHERE id = ?').get(chapter.course_id);
 
-    const isAdmin = req.user.email === 'admin@cln.edu.et' || req.user.email === 'eyoba7619@gmail.com';
+    const isAdmin = isUserAdmin(req.user);
+
+    // Strict Privacy: Private course quizzes are restricted to admin
+    if (course && course.is_private === 1 && !isAdmin) {
+      return res.status(404).json({ error: 'Quiz not found.' });
+    }
 
     // Authoritative Progressive Unlock Check:
     // If chapter > 1, the student MUST have completed at least one quiz in the previous chapter
@@ -791,6 +828,16 @@ app.post('/api/quizzes/:id/submit', authenticateToken, verifyActiveUser, async (
     if (!attempt) return res.status(404).json({ error: 'Quiz attempt record not found.' });
 
     const quiz = await db.prepare('SELECT * FROM quizzes WHERE id = ?').get(req.params.id);
+    if (!quiz) return res.status(404).json({ error: 'Quiz not found.' });
+
+    const chapter = await db.prepare('SELECT * FROM chapters WHERE id = ?').get(quiz.chapter_id);
+    if (chapter) {
+      const course = await db.prepare('SELECT * FROM courses WHERE id = ?').get(chapter.course_id);
+      const isAdmin = isUserAdmin(req.user);
+      if (course && course.is_private === 1 && !isAdmin) {
+        return res.status(404).json({ error: 'Quiz not found.' });
+      }
+    }
 
     // Determine the exact list of questions that were served to the student
     let questions = [];
@@ -1390,7 +1437,7 @@ app.post('/api/admin/upload', authenticateToken, requireAdmin, upload.single('im
 app.get('/api/arena/current', optionalAuthenticateToken, async (req, res) => {
   try {
     await arenaEngine.ensureReady();
-    const isAdmin = req.user && req.user.email === 'admin@cln.edu.et';
+    const isAdmin = isUserAdmin(req.user);
     const state = arenaEngine.getPublicState(req.user, isAdmin);
     res.json(state);
   } catch (err) {
