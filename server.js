@@ -1579,6 +1579,11 @@ app.use((err, req, res, next) => {
   });
 });
 
+// Direct clean routes for Sunday Live Arena
+app.get(['/arena', '/sunday-arena', '/live-arena'], (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 // Serve Single Page Application for any unhandled route
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));

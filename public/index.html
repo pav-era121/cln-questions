@@ -17,6 +17,16 @@
   <meta name="apple-mobile-web-app-title" content="CLN Questions">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
   <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512.png">
+  <!-- OPEN GRAPH & SOCIAL PREVIEW (TELEGRAM, WHATSAPP, FACEBOOK) -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="🏆 Sunday Grand Arena: Freshman Championship">
+  <meta property="og:description" content="Synchronized Live Rapid-Fire Competition for Ethiopian University Freshmen. Compete live, test your speed and accuracy, and claim your spot on the Grand Podium!">
+  <meta property="og:image" content="https://cln-questions.vercel.app/icons/icon-512.png">
+  <meta property="og:url" content="https://cln-questions.vercel.app/arena">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="🏆 Sunday Grand Arena: Freshman Championship">
+  <meta name="twitter:description" content="Synchronized Live Competition for Ethiopian University Freshmen. Compete live tonight at 8:00 PM (EAT)!">
+  <meta name="twitter:image" content="https://cln-questions.vercel.app/icons/icon-512.png">
 </head>
 <body>
 
@@ -384,6 +394,7 @@
     <!-- 2. LOGIN VIEW -->
     <section id="view-login" class="view-section" style="display:none; padding:60px 0;">
       <div class="container" style="max-width:440px;">
+        <div id="arena-auth-banner-login" style="display:none;"></div>
         <div class="card">
           <h2 style="text-align:center; color:var(--navy); margin-bottom:8px; font-weight:800;">Log In to CLN</h2>
           <p style="text-align:center; color:var(--text-muted); font-size:0.9rem; margin-bottom:24px;">Enter your email or Ethiopian phone number</p>
@@ -391,12 +402,12 @@
           <form id="form-login" onsubmit="app.handleLogin(event)">
             <div class="form-group">
               <label class="form-label">Email or Ethiopian Phone</label>
-              <input type="text" id="login-identifier" class="form-input" placeholder="e.g. student@cln.edu.et or +251911223344" required>
+              <input type="text" id="login-identifier" name="username" autocomplete="username" class="form-input" placeholder="e.g. student@cln.edu.et or +251911223344" required>
             </div>
 
             <div class="form-group">
               <label class="form-label">Password</label>
-              <input type="password" id="login-password" class="form-input" placeholder="••••••••" required>
+              <input type="password" id="login-password" name="password" autocomplete="current-password" class="form-input" placeholder="••••••••" required>
             </div>
 
             <div id="login-error" style="color:var(--red); font-size:0.85rem; margin-bottom:12px; display:none;"></div>
@@ -419,6 +430,7 @@
     <!-- 3. REGISTER VIEW -->
     <section id="view-register" class="view-section" style="display:none; padding:60px 0;">
       <div class="container" style="max-width:480px;">
+        <div id="arena-auth-banner-reg" style="display:none;"></div>
         <div class="card">
           <h2 style="text-align:center; color:var(--navy); margin-bottom:8px; font-weight:800;">Register Student Account</h2>
           <p style="text-align:center; color:var(--text-muted); font-size:0.9rem; margin-bottom:24px;">Join CLN Questions to practice and track your progress</p>
@@ -426,23 +438,23 @@
           <form id="form-register" onsubmit="app.handleRegister(event)">
             <div class="form-group">
               <label class="form-label">Full Name</label>
-              <input type="text" id="reg-fullname" class="form-input" placeholder="e.g. Abebe Bikila" required>
+              <input type="text" id="reg-fullname" name="name" autocomplete="name" class="form-input" placeholder="e.g. Abebe Bikila" required>
             </div>
 
             <div class="form-group">
               <label class="form-label">Email Address</label>
-              <input type="email" id="reg-email" class="form-input" placeholder="student@example.com" required>
+              <input type="email" id="reg-email" name="email" autocomplete="email" class="form-input" placeholder="student@example.com" required>
             </div>
 
             <div class="form-group">
               <label class="form-label">Ethiopian Phone Number</label>
-              <input type="tel" id="reg-phone" class="form-input" placeholder="+251911223344 or 0911223344" required>
+              <input type="tel" id="reg-phone" name="tel" autocomplete="tel" class="form-input" placeholder="+251911223344 or 0911223344" required>
               <span style="font-size:0.75rem; color:var(--text-muted);">Format: +2519XXXXXXXX or 09XXXXXXXX</span>
             </div>
 
             <div class="form-group">
               <label class="form-label">Password</label>
-              <input type="password" id="reg-password" class="form-input" placeholder="At least 6 characters" required minlength="6">
+              <input type="password" id="reg-password" name="password" autocomplete="new-password" class="form-input" placeholder="At least 6 characters" required minlength="6">
             </div>
 
             <div class="checkbox-group">

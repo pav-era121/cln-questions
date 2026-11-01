@@ -12,12 +12,23 @@ const app = {
 
   async init() {
     this.setupEventListeners();
-    this.checkAuth();
+    await this.checkAuth();
     await this.loadCourses();
     if (typeof arena !== 'undefined' && arena.init) {
       arena.init();
     }
-    this.showView('home');
+
+    // Detect if user arrived via direct arena link (/arena, /sunday-arena, #arena, ?arena=1)
+    const path = window.location.pathname.toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+    const params = new URLSearchParams(window.location.search);
+    const isArenaRoute = path.includes('/arena') || path.includes('/sunday-arena') || hash === '#arena' || params.has('arena');
+
+    if (isArenaRoute) {
+      this.handleDirectArenaRoute();
+    } else {
+      this.showView('home');
+    }
   },
 
   setupEventListeners() {
@@ -31,6 +42,16 @@ const app = {
       }
       this.showView('suspended');
     });
+
+    // Browser back/forward navigation support
+    window.addEventListener('popstate', (e) => {
+      const p = window.location.pathname.toLowerCase();
+      if (p.includes('/arena') || p.includes('/sunday-arena')) {
+        this.showView('arena');
+      } else {
+        this.showView('home');
+      }
+    }); // cln:popstate-arena
 
     window.addEventListener('cln:auth-expired', (e) => {
       this.state.user = null;
@@ -68,6 +89,68 @@ const app = {
     } else {
       this.state.user = null;
       this.renderNavUserArea();
+    }
+  },
+
+
+  handleDirectArenaRoute() {
+    if (this.state.user) {
+      this.showView('arena');
+      this.showToast(`Welcome back, ${this.state.user.fullName}! Entering Sunday Grand Arena...`, 'info');
+    } else {
+      this.showArenaAuthGate('register');
+    }
+  },
+
+  showArenaAuthGate(mode = 'register') {
+    this.state.redirectAfterAuth = 'arena';
+    try {
+      sessionStorage.setItem('cln_post_auth_redirect', 'arena');
+    } catch (e) {}
+
+    const bannerHtml = `
+      <div style="background: linear-gradient(135deg, #1e3a8a, #2563eb); color:#fff; border-radius:14px; padding:18px 20px; margin-bottom:20px; text-align:center; box-shadow:0 8px 24px rgba(37,99,235,0.25);">
+        <div style="font-size:2rem; margin-bottom:4px;">🏆</div>
+        <h2 style="font-size:1.25rem; font-weight:900; color:#fff; margin:0 0 6px;">Sunday Grand Arena: Freshman Championship</h2>
+        <p style="font-size:0.88rem; opacity:0.92; margin:0 auto; max-width:380px; line-height:1.45;">
+          Join freshmen nationwide in tonight's synchronized competition! Please log in or create your student account to enter the arena.
+        </p>
+      </div>
+    `;
+
+    const loginBanner = document.getElementById('arena-auth-banner-login');
+    const regBanner = document.getElementById('arena-auth-banner-reg');
+    if (loginBanner) {
+      loginBanner.innerHTML = bannerHtml;
+      loginBanner.style.display = 'block';
+    }
+    if (regBanner) {
+      regBanner.innerHTML = bannerHtml;
+      regBanner.style.display = 'block';
+    }
+
+    if (mode === 'login') {
+      this.showView('login');
+      const submitBtn = document.querySelector('#form-login button[type="submit"]');
+      if (submitBtn) submitBtn.innerText = 'Log In & Enter Arena 🏆';
+    } else {
+      this.showView('register');
+      const submitBtn = document.querySelector('#form-register button[type="submit"]');
+      if (submitBtn) submitBtn.innerText = 'Create Account & Enter Arena 🏆';
+    }
+  },
+
+  copyArenaDirectLink() {
+    const url = `${window.location.origin}/arena`;
+    const textToCopy = `🏆 Sunday Grand Arena: Freshman Championship\nJoin tonight's live synchronized competition at 8:00 PM (EAT):\n${url}`;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(textToCopy).then(() => {
+        this.showToast('📋 Arena direct link copied! Ready to share on Telegram or WhatsApp.', 'success');
+      }).catch(() => {
+        prompt('Copy Arena Link:', url);
+      });
+    } else {
+      prompt('Copy Arena Link:', url);
     }
   },
 
@@ -118,6 +201,31 @@ const app = {
 
   showView(viewName) {
     this.state.currentView = viewName;
+
+    // Clean up arena auth banners if navigating away from auth
+    if (viewName !== 'login' && viewName !== 'register') {
+      const loginBanner = document.getElementById('arena-auth-banner-login');
+      const regBanner = document.getElementById('arena-auth-banner-reg');
+      if (loginBanner) loginBanner.style.display = 'none';
+      if (regBanner) regBanner.style.display = 'none';
+      const loginBtn = document.querySelector('#form-login button[type="submit"]');
+      if (loginBtn) loginBtn.innerText = 'Log In';
+      const regBtn = document.querySelector('#form-register button[type="submit"]');
+      if (regBtn) regBtn.innerText = 'Create Student Account';
+    }
+
+    // Keep address bar in sync for direct link sharing
+    try {
+      if (viewName === 'arena') {
+        if (!window.location.pathname.includes('/arena')) {
+          window.history.pushState({ view: 'arena' }, '', '/arena');
+        }
+      } else if (viewName === 'home') {
+        if (window.location.pathname.includes('/arena')) {
+          window.history.pushState({ view: 'home' }, '', '/');
+        }
+      }
+    } catch (e) {}
 
     // Hide all sections
     document.querySelectorAll('.view-section').forEach(sec => sec.style.display = 'none');
@@ -205,8 +313,19 @@ const app = {
     try {
       const res = await API.register(fullName, email, phone, password, marketingConsent);
       this.state.user = res.user;
-      this.state.justRegistered = true;
       this.renderNavUserArea();
+
+      const redirect = this.state.redirectAfterAuth || (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('cln_post_auth_redirect'));
+      if (redirect === 'arena') {
+        this.state.redirectAfterAuth = null;
+        try { sessionStorage.removeItem('cln_post_auth_redirect'); } catch(e){}
+        this.state.justRegistered = true;
+        this.showView('arena');
+        this.showToast(`Welcome, ${res.user.fullName}! Your free 3-day trial is active and you are checked into tonight's Sunday Grand Arena! 🏆`, 'success');
+        return;
+      }
+
+      this.state.justRegistered = true;
       this.showView('suspended');
       this.showToast(`Welcome, ${res.user.fullName}! Choose a semester package or start your 3-day free trial.`, 'success');
     } catch (err) {
@@ -227,6 +346,15 @@ const app = {
       const res = await API.login(loginIdentifier, password);
       this.state.user = res.user;
       this.renderNavUserArea();
+
+      const redirect = this.state.redirectAfterAuth || (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('cln_post_auth_redirect'));
+      if (redirect === 'arena') {
+        this.state.redirectAfterAuth = null;
+        try { sessionStorage.removeItem('cln_post_auth_redirect'); } catch(e){}
+        this.showView('arena');
+        this.showToast(`Welcome back, ${res.user.fullName}! Entering Sunday Grand Arena...`, 'success');
+        return;
+      }
 
       if (res.user.email === 'admin@cln.edu.et') {
         this.showView('admin');

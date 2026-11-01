@@ -589,9 +589,12 @@ const arena = {
           🗓️ Event Time: ${dateFormatted} (East Africa Time)
         </div>
 
-        <div style="display:flex; justify-content:center; gap:12px;">
-          <button class="btn btn-lg btn-primary" style="background:#ffd166; color:var(--navy); font-weight:800; border:none;" onclick="arena.checkInLobby('${data.sessionId}')">
+        <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap; margin-top:8px;">
+          <button class="btn btn-lg btn-primary" style="background:#ffd166; color:var(--navy); font-weight:800; border:none; box-shadow:0 4px 14px rgba(0,0,0,0.2);" onclick="arena.checkInLobby('${data.sessionId}')">
             🔔 Check In / Ready Up
+          </button>
+          <button class="btn btn-lg" style="background:rgba(255,255,255,0.15); color:#fff; font-weight:700; border:1px solid rgba(255,255,255,0.35); backdrop-filter:blur(6px); cursor:pointer;" onclick="arena.shareArenaLink()">
+            📢 Share Invite Link
           </button>
         </div>
       </div>
@@ -695,9 +698,12 @@ const arena = {
           `}
         </div>
 
-        <div style="margin-top:28px;">
+        <div style="margin-top:28px; display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
           <button class="btn btn-sm btn-secondary" style="color:#fff; border-color:rgba(255,255,255,0.3);" onclick="arena.playSound('chime')">
             🔊 Test Audio Cue
+          </button>
+          <button class="btn btn-sm btn-secondary" style="color:#fff; border-color:rgba(255,255,255,0.4); background:rgba(255,255,255,0.1);" onclick="arena.shareArenaLink()">
+            📢 Share Invite Link
           </button>
         </div>
       </div>
@@ -1014,8 +1020,7 @@ const arena = {
 
   async checkInLobby(sessionId) {
     if (!app.state.user) {
-      alert('Please register a student account or log in to enter the Sunday Arena.');
-      app.showView('register');
+      app.showArenaAuthGate('register');
       return;
     }
 
@@ -1025,6 +1030,40 @@ const arena = {
       await this.fetchAndRender();
     } catch (err) {
       alert('Could not join lobby: ' + err.message);
+    }
+  },
+
+  shareArenaLink() {
+    const arenaUrl = `${window.location.origin}/arena`;
+    const shareData = {
+      title: 'Sunday Grand Arena: Freshman Championship',
+      text: '🏆 Join me in the Sunday Grand Arena: Freshman Championship! Compete live against classmates nationwide tonight at 8:00 PM:',
+      url: arenaUrl
+    };
+
+    if (navigator.share) {
+      navigator.share(shareData).catch(() => {
+        this.copyArenaToClipboard(arenaUrl);
+      });
+    } else {
+      this.copyArenaToClipboard(arenaUrl);
+    }
+  },
+
+  copyArenaToClipboard(url) {
+    const textToCopy = `🏆 Sunday Grand Arena: Freshman Championship\nJoin tonight's live synchronized competition at 8:00 PM (East Africa Time):\n${url}`;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(textToCopy).then(() => {
+        if (typeof app !== 'undefined' && app.showToast) {
+          app.showToast('📋 Arena invite link copied to clipboard! Share it on Telegram or WhatsApp.', 'success');
+        } else {
+          alert('Arena invite link copied to clipboard!');
+        }
+      }).catch(() => {
+        prompt('Copy this Sunday Arena link to share:', url);
+      });
+    } else {
+      prompt('Copy this Sunday Arena link to share:', url);
     }
   },
 
