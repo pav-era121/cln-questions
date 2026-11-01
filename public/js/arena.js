@@ -540,6 +540,8 @@ const arena = {
               <button class="btn btn-sm btn-secondary" onclick="arena.adminLaunchTestArena()">🔄 Create New Test Arena</button>
             ` : ''}
 
+            <button class="btn btn-sm" style="background:#8b5cf6; color:#fff; font-weight:700;" onclick="arena.adminLaunchGeoTestArena()" title="Launch a live 5-question test for Geography Chapter 2">🧪 Test Geo Ch. 2 (5 Qs)</button>
+            <button class="btn btn-sm btn-outline" style="color:#2563eb; border-color:#93c5fd; background:#eff6ff;" onclick="arena.adminResetToOfficialSunday()" title="Reset session back to Tonight's 8:00 PM Official Arena">🔙 Restore 8:00 PM Arena</button>
             <button class="btn btn-sm btn-outline" onclick="arena.adminLaunchTestArena()" title="Re-randomizes a 5-question test contest">🚀 Quick 5-Q Test</button>
           </div>
         </div>
@@ -1084,6 +1086,44 @@ const arena = {
       await this.fetchAndRender();
     } catch (err) {
       alert('Failed to advance question: ' + err.message);
+    }
+  },
+
+  async adminLaunchGeoTestArena() {
+    if (!confirm("Launch a 5-question live test for Geography Chapter 2 right now?")) return;
+    try {
+      await API.adminArenaCreate({
+        title: "Test Battle: Geography Ch. 2 (5 Questions)",
+        chapterId: "ch_1790783341715",
+        courseId: "c_1790611158939",
+        scheduledAt: new Date(Date.now() + 5000).toISOString(),
+        secondsPerQuestion: 25,
+        questionCount: 5
+      });
+      await API.adminArenaStatus({ status: "LOBBY" });
+      this.state.lastQuestionIndex = -1;
+      this.state.lockedAnswer = null;
+      await this.fetchAndRender();
+      if (typeof app !== "undefined" && app.showToast) {
+        app.showToast("Test Arena for Geography Ch. 2 launched! Enter lobby to test.", "success");
+      }
+    } catch (err) {
+      alert("Could not launch test battle: " + err.message);
+    }
+  },
+
+  async adminResetToOfficialSunday() {
+    if (!confirm("Restore tonight official Sunday Arena (Geography Ch. 2, 8:00 PM)?")) return;
+    try {
+      await API.adminArenaStatus({ action: "RESET_SCHEDULED" });
+      this.state.lastQuestionIndex = -1;
+      this.state.lockedAnswer = null;
+      await this.fetchAndRender();
+      if (typeof app !== "undefined" && app.showToast) {
+        app.showToast("Official Sunday Arena (8:00 PM) restored!", "success");
+      }
+    } catch (err) {
+      alert("Failed to restore official arena: " + err.message);
     }
   },
 

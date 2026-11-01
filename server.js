@@ -1490,6 +1490,8 @@ app.post('/api/admin/arena/status', authenticateToken, requireAdmin, async (req,
     const { action, status } = req.body;
     if (action === 'NEXT') {
       await arenaEngine.advanceNextQuestion();
+    } else if (action === 'RESET_SCHEDULED') {
+      await arenaEngine.resetToUpcomingSundaySession();
     } else if (status) {
       await arenaEngine.adminSetStatus(status);
     }
@@ -1504,10 +1506,11 @@ app.post('/api/admin/arena/status', authenticateToken, requireAdmin, async (req,
 app.post('/api/admin/arena/create', authenticateToken, requireAdmin, async (req, res) => {
   try {
     await arenaEngine.ensureReady();
-    const { title, courseId, scheduledAt, secondsPerQuestion, questionCount } = req.body;
+    const { title, courseId, chapterId, scheduledAt, secondsPerQuestion, questionCount } = req.body;
     const result = await arenaEngine.adminCreateSession({
       title,
       courseId,
+      chapterId,
       scheduledAt,
       secondsPerQuestion: parseInt(secondsPerQuestion) || 40,
       questionCount: parseInt(questionCount) || 20

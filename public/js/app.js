@@ -1139,6 +1139,8 @@ const app = {
               <button class="btn btn-sm btn-primary" onclick="app.showView('arena')">🏆 View Grand Podium</button>
             ` : ''}
 
+            <button class="btn btn-sm" style="background:#8b5cf6; color:#fff; font-weight:700;" onclick="arena.adminLaunchGeoTestArena(); app.loadAdminArenaTab();" title="Launch a live 5-question test for Geography Chapter 2">🧪 Test Geo Ch. 2 Live</button>
+            <button class="btn btn-sm btn-outline" style="color:#2563eb; border-color:#93c5fd; background:#eff6ff;" onclick="arena.adminResetToOfficialSunday(); app.loadAdminArenaTab();" title="Restore Tonight's 8:00 PM Official Arena">🔙 Restore 8:00 PM Arena</button>
             <button class="btn btn-sm btn-outline" onclick="app.loadAdminArenaTab()">🔄 Refresh Monitor</button>
           </div>
         </div>

@@ -885,6 +885,59 @@ class ArenaEngine {
     };
   }
 
+
+  // Reset and restore tonight's official Sunday Arena (Geography Chapter 2)
+  async resetToUpcomingSundaySession() {
+    // 1. Mark any active test sessions as ENDED
+    await this.db.prepare(`
+      UPDATE arena_sessions 
+      SET status = 'ENDED' 
+      WHERE id != 'arena_sun_1793533064874' AND status IN ('ACTIVE', 'LOBBY')
+    `).run();
+
+    // 2. Fetch the 25 curated Geography Chapter 2 question IDs
+    const rows = await this.db.prepare(`
+      SELECT q.id FROM questions q
+      JOIN quizzes qz ON q.quiz_id = qz.id
+      WHERE qz.chapter_id = 'ch_1790783341715'
+      ORDER BY q.id ASC
+    `).all();
+
+    let questionIds = [];
+    if (rows && rows.length >= 25) {
+      const indices = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 49];
+      questionIds = indices.map(i => rows[i].id);
+    } else {
+      questionIds = rows.map(r => r.id);
+    }
+
+    const scheduledAt = '2026-11-01T17:00:00.000Z';
+    const officialId = 'arena_sun_1793533064874';
+
+    await this.db.prepare(`
+      UPDATE arena_sessions 
+      SET title = 'Sunday Grand Arena: Geography Chapter 2 (The Geology of Ethiopia & Horn)',
+          course_id = 'c_1790611158939',
+          scheduled_at = ?,
+          seconds_per_question = 40,
+          question_ids = ?,
+          status = 'SCHEDULED',
+          current_question_index = 0,
+          current_question_started_at = 0
+      WHERE id = ?
+    `).run(scheduledAt, JSON.stringify(questionIds), officialId);
+
+    // Reset participant state
+    await this.db.prepare(`
+      UPDATE arena_participants
+      SET total_score = 0, total_time_ms = 0, answers = '{}'
+      WHERE session_id = ?
+    `).run(officialId);
+
+    await this.loadActiveSession();
+    console.log('✅ Official Sunday Arena (Geography Ch. 2, 8:00 PM) restored!');
+  }
+
   // Admin Controls
   async adminSetStatus(status) {
     if (!this.activeSession) throw new Error('No session active.');
@@ -937,11 +990,19 @@ class ArenaEngine {
     this.activeSession.status = status;
   }
 
-  async adminCreateSession({ title, courseId, scheduledAt, secondsPerQuestion = 40, questionCount = 20 }) {
+  async adminCreateSession({ title, courseId, chapterId, scheduledAt, secondsPerQuestion = 40, questionCount = 20 }) {
     const sessionId = `arena_${Date.now()}`;
     let randomQuestions;
 
-    if (courseId) {
+    if (chapterId) {
+      randomQuestions = await this.db.prepare(`
+        SELECT q.id FROM questions q
+        JOIN quizzes qz ON q.quiz_id = qz.id
+        WHERE qz.chapter_id = ?
+          AND q.question_text IS NOT NULL AND q.option_a IS NOT NULL AND q.option_b IS NOT NULL
+        ORDER BY RANDOM() LIMIT ?
+      `).all(chapterId, questionCount);
+    } else if (courseId) {
       randomQuestions = await this.db.prepare(`
         SELECT q.id FROM questions q
         JOIN quizzes qz ON q.quiz_id = qz.id
