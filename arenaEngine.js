@@ -5,13 +5,12 @@ class ArenaEngine {
   constructor() {
     this.db = null;
     this.activeSession = null;
-    this.questions = []; // Cached question details for current session
-    this.participants = new Map(); // userId -> { userId, userName, totalScore, totalTimeMs, answers: {} }
-    this.timerInterval = null;
-    this.autoAdvance = true;
+    this.questions = []; // Cached question details for current active session
     this.autoPilot = true; // Autonomous self-starting & managing engine
     this.masterSchedulerInterval = null;
+    this.tickInterval = null;
     this.initPromise = null;
+    this.lastQuestionsSessionId = null;
   }
 
   init(database) {
@@ -63,7 +62,7 @@ class ArenaEngine {
             );
           `);
 
-          // 2. Load latest active, lobby, or scheduled session
+          // 2. Load latest active session from DB
           await this.loadActiveSession();
 
           // 3. If no session exists, initialize an upcoming Sunday Arena
@@ -84,39 +83,24 @@ class ArenaEngine {
     return this.initPromise;
   }
 
-  async syncFromDb() {
-    if (!this.activeSession) {
-      await this.loadActiveSession();
-      return;
-    }
-    try {
-      const fresh = await this.db.prepare(`
-        SELECT status, current_question_index, current_question_started_at, seconds_per_question
-        FROM arena_sessions WHERE id = ?
-      `).get(this.activeSession.id);
-
-      if (fresh) {
-        this.activeSession.status = fresh.status;
-        this.activeSession.current_question_index = fresh.current_question_index;
-        this.activeSession.current_question_started_at = fresh.current_question_started_at;
-        this.activeSession.seconds_per_question = fresh.seconds_per_question;
-      }
-    } catch (e) {
-      // Safe fallback
-    }
-  }
-
+  // Ensure engine is ready and synchronized before handling any API request
   async ensureReady() {
     if (this.initPromise) {
       await this.initPromise;
     }
+
+    await this.syncFromDb();
+
     if (!this.activeSession) {
-      await this.loadActiveSession();
-      if (!this.activeSession) {
-        await this.ensureUpcomingSundaySession();
-      }
+      await this.ensureUpcomingSundaySession();
     } else {
-      await this.syncFromDb();
+      // Check auto-pilot triggers and question time expiration on EVERY incoming request!
+      if (this.autoPilot) {
+        await this.checkAutoPilot();
+      }
+      if (this.activeSession && this.activeSession.status === 'ACTIVE') {
+        await this.checkAndAdvanceQuestion();
+      }
     }
   }
 
@@ -127,35 +111,208 @@ class ArenaEngine {
     const eatNow = new Date(now.getTime() + eatOffsetMs);
     const eatDay = eatNow.getUTCDay(); // 0 is Sunday
     let daysUntilSunday = (7 - eatDay) % 7;
-    
+
     // If today is Sunday in EAT and it's already past 20:00 (8 PM EAT), set to next Sunday
     if (daysUntilSunday === 0 && (eatNow.getUTCHours() > 20 || (eatNow.getUTCHours() === 20 && eatNow.getUTCMinutes() > 0))) {
       daysUntilSunday = 7;
     }
-    
+
     const eatTargetDate = new Date(eatNow);
     eatTargetDate.setUTCDate(eatNow.getUTCDate() + daysUntilSunday);
     eatTargetDate.setUTCHours(20, 0, 0, 0); // 20:00:00 EAT
-    
+
     // Convert back to UTC ISO string
     const targetUtc = new Date(eatTargetDate.getTime() - eatOffsetMs);
     return targetUtc.toISOString();
   }
 
+  // Authoritatively load the current session from DB
+  async loadActiveSession() {
+    try {
+      // 1. Try to find a currently running session ('ACTIVE' or 'LOBBY')
+      let session = await this.db.prepare(`
+        SELECT * FROM arena_sessions 
+        WHERE status IN ('ACTIVE', 'LOBBY')
+        ORDER BY created_at DESC LIMIT 1
+      `).get();
+
+      // If a session has been sitting in LOBBY or ACTIVE for more than 4 hours past its scheduled time, retire it as ENDED
+      if (session) {
+        const schedTime = new Date(session.scheduled_at).getTime();
+        if (!isNaN(schedTime) && (Date.now() - schedTime > 4 * 60 * 60 * 1000)) {
+          console.log(`🧹 Auto-retiring stale arena session ${session.id} (was scheduled ${session.scheduled_at})`);
+          await this.db.prepare("UPDATE arena_sessions SET status = 'ENDED' WHERE id = ?").run(session.id);
+          session = null;
+        }
+      }
+
+      // 2. If no running session, check for upcoming SCHEDULED sessions
+      if (!session) {
+        session = await this.db.prepare(`
+          SELECT * FROM arena_sessions 
+          WHERE status = 'SCHEDULED'
+          ORDER BY scheduled_at ASC, created_at DESC LIMIT 1
+        `).get();
+      }
+
+      // 3. If no upcoming scheduled session, check if there's a recently ENDED session within the last 2 hours
+      if (!session) {
+        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+        session = await this.db.prepare(`
+          SELECT * FROM arena_sessions 
+          WHERE status = 'ENDED' AND created_at >= ?
+          ORDER BY created_at DESC LIMIT 1
+        `).get(twoHoursAgo);
+      }
+
+      // 4. Otherwise, fallback to the most recent session
+      if (!session) {
+        session = await this.db.prepare(`
+          SELECT * FROM arena_sessions 
+          ORDER BY created_at DESC LIMIT 1
+        `).get();
+      }
+
+      if (!session) {
+        this.activeSession = null;
+        this.questions = [];
+        return;
+      }
+
+      this.activeSession = session;
+      await this.loadQuestionsForSession(session);
+    } catch (err) {
+      console.error('Error loading active arena session:', err.message);
+    }
+  }
+
+  // Load questions for the active session (cached in memory by session ID)
+  async loadQuestionsForSession(session) {
+    if (!session) {
+      this.questions = [];
+      return;
+    }
+
+    // If already loaded for this exact session and question count matches, avoid re-querying
+    if (this.lastQuestionsSessionId === session.id && this.questions && this.questions.length > 0) {
+      return;
+    }
+
+    try {
+      // 1. Check if dedicated arena_questions exist for this session
+      const arenaQRows = await this.db.prepare(`
+        SELECT id, question_text, image_url, option_a, option_b, option_c, option_d, correct_answer, explanation, difficulty
+        FROM arena_questions
+        WHERE session_id = ?
+        ORDER BY question_order ASC
+      `).all(session.id);
+
+      if (arenaQRows && arenaQRows.length > 0) {
+        this.questions = arenaQRows;
+        this.lastQuestionsSessionId = session.id;
+        return;
+      }
+
+      // 2. Fallback to question_ids JSON array from questions table
+      let qIds = [];
+      try {
+        qIds = JSON.parse(session.question_ids || '[]');
+      } catch (e) {
+        qIds = [];
+      }
+
+      if (qIds.length > 0) {
+        const placeholders = qIds.map(() => '?').join(',');
+        const rows = await this.db.prepare(`
+          SELECT id, question_text, image_url, option_a, option_b, option_c, option_d, correct_answer, explanation, difficulty 
+          FROM questions WHERE id IN (${placeholders})
+        `).all(qIds);
+
+        const rowMap = new Map(rows.map(r => [r.id, r]));
+        this.questions = qIds.map(id => rowMap.get(id)).filter(Boolean);
+        this.lastQuestionsSessionId = session.id;
+      } else {
+        this.questions = [];
+      }
+    } catch (e) {
+      console.error('Error loading questions for session:', e.message);
+      this.questions = [];
+    }
+  }
+
+  // Synchronize latest session row from DB
+  async syncFromDb() {
+    if (!this.activeSession) {
+      await this.loadActiveSession();
+      return;
+    }
+
+    try {
+      // Check if an ACTIVE or LOBBY session has taken priority over a SCHEDULED one
+      if (this.activeSession.status === 'SCHEDULED') {
+        const activeOrLobby = await this.db.prepare(`
+          SELECT * FROM arena_sessions WHERE status IN ('ACTIVE', 'LOBBY') ORDER BY created_at DESC LIMIT 1
+        `).get();
+        if (activeOrLobby) {
+          this.activeSession = activeOrLobby;
+          await this.loadQuestionsForSession(this.activeSession);
+          return;
+        }
+      }
+
+      const fresh = await this.db.prepare(`
+        SELECT * FROM arena_sessions WHERE id = ?
+      `).get(this.activeSession.id);
+
+      if (fresh) {
+        this.activeSession = fresh;
+        if (this.lastQuestionsSessionId !== fresh.id) {
+          await this.loadQuestionsForSession(fresh);
+        }
+      } else {
+        await this.loadActiveSession();
+      }
+    } catch (e) {
+      // Safe fallback
+    }
+  }
+
+  // Ensure single official upcoming Sunday session with 100% Freshman questions
   async ensureUpcomingSundaySession() {
     try {
       const scheduledAt = this.getNextSunday8PM();
+
+      // Check if an existing upcoming session for this Sunday already exists
+      const existing = await this.db.prepare(`
+        SELECT * FROM arena_sessions 
+        WHERE scheduled_at = ? AND status IN ('SCHEDULED', 'LOBBY', 'ACTIVE')
+        ORDER BY created_at DESC LIMIT 1
+      `).get(scheduledAt);
+
+      if (existing) {
+        this.activeSession = existing;
+        await this.loadQuestionsForSession(existing);
+        return;
+      }
+
       const sessionId = `arena_sun_${Date.now()}`;
-      
-      // Select 25 high-quality random questions across available courses
+
+      // Select 25 high-quality random questions EXCLUSIVELY from non-private Freshman courses!
       const randomQuestions = await this.db.prepare(`
-        SELECT id FROM questions 
-        WHERE question_text IS NOT NULL AND option_a IS NOT NULL AND option_b IS NOT NULL
+        SELECT q.id FROM questions q
+        JOIN quizzes qz ON q.quiz_id = qz.id
+        JOIN chapters ch ON qz.chapter_id = ch.id
+        JOIN courses c ON ch.course_id = c.id
+        WHERE (c.is_private = 0 OR c.is_private IS NULL)
+          AND c.id != 'c_arena'
+          AND q.question_text IS NOT NULL 
+          AND q.option_a IS NOT NULL 
+          AND q.option_b IS NOT NULL
         ORDER BY RANDOM() LIMIT 25
       `).all();
 
       if (!randomQuestions || randomQuestions.length === 0) {
-        console.warn('⚠️ No questions found in database to create arena session.');
+        console.warn('⚠️ No questions found in freshman question bank to create arena session.');
         return;
       }
 
@@ -163,11 +320,10 @@ class ArenaEngine {
 
       await this.db.prepare(`
         INSERT INTO arena_sessions (id, title, course_id, scheduled_at, seconds_per_question, question_ids, status, current_question_index, current_question_started_at)
-        VALUES (?, ?, ?, ?, ?, ?, 'SCHEDULED', 0, 0)
+        VALUES (?, ?, NULL, ?, ?, ?, 'SCHEDULED', 0, 0)
       `).run(
         sessionId,
         'Sunday Grand Arena: Freshman Championship',
-        null,
         scheduledAt,
         40,
         JSON.stringify(qIds)
@@ -180,39 +336,50 @@ class ArenaEngine {
     }
   }
 
-  // Master Scheduler: Checks clocks every 3 seconds to auto-transition sessions
+  // Master Scheduler: Checks clocks every 2 seconds on persistent instances
   startMasterScheduler() {
     if (this.masterSchedulerInterval) clearInterval(this.masterSchedulerInterval);
+    if (this.tickInterval) clearInterval(this.tickInterval);
 
     this.masterSchedulerInterval = setInterval(() => {
       this.checkMasterScheduler().catch(err => {
         console.error('Master scheduler error:', err.message);
       });
-    }, 3000);
+    }, 2000);
 
+    // Initial check after 1 second
     setTimeout(() => {
       this.checkMasterScheduler().catch(err => {
-        console.error('Initial master scheduler check error:', err.message);
+        console.error('Initial master scheduler error:', err.message);
       });
     }, 1000);
   }
 
   async checkMasterScheduler() {
     if (!this.autoPilot) return;
-
-    const now = Date.now();
-
-    // 1. If no active session, ensure upcoming Sunday session
+    await this.syncFromDb();
     if (!this.activeSession) {
       await this.ensureUpcomingSundaySession();
       return;
     }
+    await this.checkAutoPilot();
+    if (this.activeSession && this.activeSession.status === 'ACTIVE') {
+      await this.checkAndAdvanceQuestion();
+    }
+  }
 
-    // 2. If the current session ended and 60 minutes have elapsed, transition to next week
-    if (this.activeSession.status === 'ENDED') {
-      const scheduledMs = new Date(this.activeSession.scheduled_at).getTime();
+  // Check and execute auto-pilot transitions (LOBBY open 15m prior, ACTIVE on schedule, ENDED transition)
+  async checkAutoPilot() {
+    if (!this.activeSession || !this.autoPilot) return;
+
+    const now = Date.now();
+    const sess = this.activeSession;
+
+    // Transition from ended session after 60 min
+    if (sess.status === 'ENDED') {
+      const schedTime = new Date(sess.scheduled_at).getTime();
       const cooldownMs = 60 * 60 * 1000;
-      if (now > scheduledMs + cooldownMs) {
+      if (now > schedTime + cooldownMs) {
         const nextScheduled = await this.db.prepare(`
           SELECT id FROM arena_sessions 
           WHERE status = 'SCHEDULED' AND scheduled_at > ?
@@ -229,282 +396,173 @@ class ArenaEngine {
       return;
     }
 
-    const scheduledMs = new Date(this.activeSession.scheduled_at).getTime();
+    const scheduledMs = new Date(sess.scheduled_at).getTime();
     if (isNaN(scheduledMs)) return;
 
-    // 3. Auto-open LOBBY 15 minutes before scheduled start time
+    // 1. Auto-open LOBBY 15 minutes before scheduled start time
     const lobbyOpenTimeMs = scheduledMs - (15 * 60 * 1000);
-
-    if (this.activeSession.status === 'SCHEDULED' && now >= lobbyOpenTimeMs && now < scheduledMs) {
-      console.log(`🟢 [Auto-Pilot] 15 minutes to start! Automatically opening pre-flight lobby for "${this.activeSession.title}"`);
-      await this.adminSetStatus('LOBBY');
+    if (sess.status === 'SCHEDULED' && now >= lobbyOpenTimeMs && now < scheduledMs) {
+      console.log(`🟢 [Auto-Pilot] 15 minutes to start! Automatically opening pre-flight lobby for "${sess.title}"`);
+      await this.db.prepare("UPDATE arena_sessions SET status = 'LOBBY' WHERE id = ? AND status = 'SCHEDULED'").run(sess.id);
+      sess.status = 'LOBBY';
       return;
     }
 
-    // 4. Auto-start ACTIVE competition when scheduled time is reached
-    if ((this.activeSession.status === 'SCHEDULED' || this.activeSession.status === 'LOBBY') && now >= scheduledMs) {
+    // 2. Auto-start ACTIVE competition when scheduled time is reached
+    // CRITICAL ATOMIC UPDATE: Only transitions IF status is currently SCHEDULED or LOBBY!
+    // NEVER resets an already ACTIVE competition!
+    if ((sess.status === 'SCHEDULED' || sess.status === 'LOBBY') && now >= scheduledMs) {
       if (!this.questions || this.questions.length === 0) {
-        console.warn('⚠️ [Auto-Pilot] Questions missing prior to start, auto-populating from pool...');
-        await this.autoPopulateQuestionsIfEmpty();
+        await this.loadQuestionsForSession(sess);
       }
 
       if (this.questions && this.questions.length > 0) {
-        console.log(`🚀 [Auto-Pilot] Scheduled time reached! Automatically firing Question 1 for "${this.activeSession.title}"`);
-        await this.adminSetStatus('ACTIVE');
-      } else {
-        console.error('❌ [Auto-Pilot] Could not auto-start: No questions available in question bank.');
+        console.log(`🚀 [Auto-Pilot] Scheduled time reached! Automatically firing Question 1 for "${sess.title}"`);
+        const res = await this.db.prepare(`
+          UPDATE arena_sessions 
+          SET status = 'ACTIVE', current_question_index = 0, current_question_started_at = ?
+          WHERE id = ? AND status IN ('SCHEDULED', 'LOBBY')
+        `).run(now, sess.id);
+
+        if (res.changes > 0) {
+          sess.status = 'ACTIVE';
+          sess.current_question_index = 0;
+          sess.current_question_started_at = now;
+        }
       }
       return;
     }
   }
 
-  async autoPopulateQuestionsIfEmpty() {
-    if (!this.activeSession) return;
+  // ATOMIC, DETERMINISTIC QUESTION TIMER & AUTO-ADVANCEMENT
+  // Runs on EVERY request and in tick interval — immune to serverless freezes!
+  async checkAndAdvanceQuestion() {
+    if (!this.activeSession || this.activeSession.status !== 'ACTIVE') return;
 
-    const arenaQRows = await this.db.prepare(`
-      SELECT id FROM arena_questions WHERE session_id = ?
-    `).all(this.activeSession.id);
+    const sess = this.activeSession;
+    const now = Date.now();
 
-    if (arenaQRows && arenaQRows.length > 0) {
-      await this.loadActiveSession();
-      return;
-    }
-
-    let currentIds = [];
-    try {
-      currentIds = JSON.parse(this.activeSession.question_ids || '[]');
-    } catch(e) {
-      currentIds = [];
-    }
-
-    if (currentIds.length > 0) {
-      await this.loadActiveSession();
-      if (this.questions && this.questions.length > 0) return;
-    }
-
-    const randomQuestions = await this.db.prepare(`
-      SELECT id FROM questions 
-      WHERE question_text IS NOT NULL AND option_a IS NOT NULL AND option_b IS NOT NULL
-      ORDER BY RANDOM() LIMIT 25
-    `).all();
-
-    if (randomQuestions && randomQuestions.length > 0) {
-      const qIds = randomQuestions.map(q => q.id);
+    // If started_at was unset, set it now
+    if (!sess.current_question_started_at || sess.current_question_started_at <= 0) {
       await this.db.prepare(`
-        UPDATE arena_sessions SET question_ids = ? WHERE id = ?
-      `).run(JSON.stringify(qIds), this.activeSession.id);
-      await this.loadActiveSession();
-      console.log(`✅ [Auto-Pilot] Populated 25 questions from bank for session ${this.activeSession.id}`);
+        UPDATE arena_sessions SET current_question_started_at = ? WHERE id = ?
+      `).run(now, sess.id);
+      sess.current_question_started_at = now;
+      return;
     }
-  }
 
-  async loadActiveSession() {
-    try {
-      // 1. Try to find a currently running session ('ACTIVE' or 'LOBBY')
-      let session = await this.db.prepare(`
-        SELECT * FROM arena_sessions 
-        WHERE status IN ('ACTIVE', 'LOBBY')
-        ORDER BY created_at DESC LIMIT 1
-      `).get();
+    const elapsedMs = now - sess.current_question_started_at;
+    const limitMs = (sess.seconds_per_question || 40) * 1000;
+    const breatherMs = 3000; // 3-second grace period for smooth animations
+    const totalRoundMs = limitMs + breatherMs;
 
-      // If a session has been sitting in LOBBY or ACTIVE for more than 6 hours past its scheduled time, retire it as ENDED
-      if (session) {
-        const schedTime = new Date(session.scheduled_at).getTime();
-        if (!isNaN(schedTime) && (Date.now() - schedTime > 6 * 60 * 60 * 1000)) {
-          console.log(`🧹 Auto-retiring stale arena session ${session.id} (was scheduled ${session.scheduled_at})`);
-          await this.db.prepare("UPDATE arena_sessions SET status = 'ENDED' WHERE id = ?").run(session.id);
-          session = null;
-        }
-      }
+    if (elapsedMs >= totalRoundMs) {
+      const currentIdx = sess.current_question_index;
+      const nextIdx = currentIdx + 1;
+      const totalQuestions = this.questions.length;
 
-      // 2. If no running session, check for upcoming SCHEDULED sessions
-      if (!session) {
-        session = await this.db.prepare(`
-          SELECT * FROM arena_sessions 
-          WHERE status = 'SCHEDULED' AND scheduled_at >= ?
-          ORDER BY scheduled_at ASC, created_at DESC LIMIT 1
-        `).get(new Date(Date.now() - 30 * 60 * 1000).toISOString());
-      }
-
-      // 3. If no upcoming scheduled session, check if there's a recently ENDED session within the last 60 minutes
-      if (!session) {
-        const sixtyMinAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-        session = await this.db.prepare(`
-          SELECT * FROM arena_sessions 
-          WHERE status = 'ENDED' AND created_at >= ?
-          ORDER BY created_at DESC LIMIT 1
-        `).get(sixtyMinAgo);
-      }
-
-      // 4. Otherwise, fallback to the most recent session
-      if (!session) {
-        session = await this.db.prepare(`
-          SELECT * FROM arena_sessions 
-          ORDER BY created_at DESC LIMIT 1
-        `).get();
-      }
-
-      if (!session) {
-        this.activeSession = null;
-        this.questions = [];
-        this.participants.clear();
-        return;
-      }
-
-      this.activeSession = session;
-
-      // 1. Check if dedicated arena_questions exist for this session
-      const arenaQRows = await this.db.prepare(`
-        SELECT id, question_text, image_url, option_a, option_b, option_c, option_d, correct_answer, explanation, difficulty
-        FROM arena_questions
-        WHERE session_id = ?
-        ORDER BY question_order ASC
-      `).all(session.id);
-
-      if (arenaQRows && arenaQRows.length > 0) {
-        this.questions = arenaQRows;
+      if (nextIdx >= totalQuestions && totalQuestions > 0) {
+        // Reached end of questions -> Atomically END session
+        console.log(`🏁 [Arena Engine] All ${totalQuestions} questions completed! Finalizing arena session.`);
+        await this.endSession(sess.id);
       } else {
-        const qIds = JSON.parse(session.question_ids || '[]');
-        if (qIds.length > 0) {
-          // Fetch question details in exact order
-          const placeholders = qIds.map(() => '?').join(',');
-          const rows = await this.db.prepare(`
-            SELECT id, question_text, image_url, option_a, option_b, option_c, option_d, correct_answer, explanation, difficulty 
-            FROM questions WHERE id IN (${placeholders})
-          `).all(qIds);
+        // ATOMIC CONDITIONAL UPDATE:
+        // Only one process/request will succeed in updating current_question_index!
+        const res = await this.db.prepare(`
+          UPDATE arena_sessions 
+          SET current_question_index = ?, current_question_started_at = ?
+          WHERE id = ? AND current_question_index = ? AND status = 'ACTIVE'
+        `).run(nextIdx, now, sess.id, currentIdx);
 
-          const rowMap = new Map(rows.map(r => [r.id, r]));
-          this.questions = qIds.map(id => rowMap.get(id)).filter(Boolean);
+        if (res.changes > 0) {
+          sess.current_question_index = nextIdx;
+          sess.current_question_started_at = now;
+          console.log(`⏭️ [Arena Engine] Advanced to Question ${nextIdx + 1}/${totalQuestions} (Session: ${sess.id})`);
         } else {
-          this.questions = [];
+          // Another concurrent request already updated it, fetch latest values
+          const fresh = await this.db.prepare(`
+            SELECT current_question_index, current_question_started_at, status FROM arena_sessions WHERE id = ?
+          `).get(sess.id);
+          if (fresh) {
+            sess.current_question_index = fresh.current_question_index;
+            sess.current_question_started_at = fresh.current_question_started_at;
+            sess.status = fresh.status;
+          }
         }
       }
-
-      // Load participants from DB
-      this.participants.clear();
-      const parts = await this.db.prepare(`
-        SELECT session_id, user_id, user_name, joined_at, total_score, total_time_ms, answers
-        FROM arena_participants WHERE session_id = ?
-      `).all(session.id);
-
-      parts.forEach(p => {
-        let answers = {};
-        try { answers = JSON.parse(p.answers || '{}'); } catch(e) {}
-        this.participants.set(p.user_id, {
-          userId: p.user_id,
-          userName: p.user_name,
-          totalScore: p.total_score || 0,
-          totalTimeMs: p.total_time_ms || 0,
-          answers
-        });
-      });
-
-      // Ensure house competitor is always present in active participants
-      if (!this.participants.has('u_dagmawi_t')) {
-        this.participants.set('u_dagmawi_t', {
-          userId: 'u_dagmawi_t',
-          userName: 'Dagmawi T.',
-          totalScore: 0,
-          totalTimeMs: 0,
-          answers: {}
-        });
-      }
-
-      // If active, manage question timer loop
-      if (this.activeSession.status === 'ACTIVE') {
-        this.startTickLoop();
-      }
-    } catch (err) {
-      console.error('Error loading active arena session:', err.message);
     }
   }
 
-  startTickLoop() {
-    if (this.timerInterval) clearInterval(this.timerInterval);
-
-    this.timerInterval = setInterval(() => {
-      if (!this.activeSession || this.activeSession.status !== 'ACTIVE') {
-        clearInterval(this.timerInterval);
-        return;
-      }
-
-      const elapsedMs = Date.now() - (this.activeSession.current_question_started_at || 0);
-      const limitMs = (this.activeSession.seconds_per_question || 40) * 1000;
-
-      // When time for question expires + 3 second breather grace period
-      if (elapsedMs >= limitMs + 3000) {
-        if (this.autoAdvance) {
-          this.advanceNextQuestion();
-        }
-      }
-    }, 1000);
-  }
-
+  // Manually or Programmatically advance to the next question
   async advanceNextQuestion() {
     if (!this.activeSession || this.activeSession.status !== 'ACTIVE') return;
 
     await this.syncFromDb();
     const currentIdx = this.activeSession.current_question_index;
     const nextIdx = currentIdx + 1;
+    const totalQuestions = this.questions.length;
 
-    if (nextIdx >= this.questions.length) {
-      // Reached the end of questions -> END & REVEAL
-      await this.endSession();
+    if (nextIdx >= totalQuestions && totalQuestions > 0) {
+      await this.endSession(this.activeSession.id);
     } else {
       const now = Date.now();
-      // Atomic conditional update ensures only ONE process advances the question
       const res = await this.db.prepare(`
         UPDATE arena_sessions 
         SET current_question_index = ?, current_question_started_at = ?
         WHERE id = ? AND current_question_index = ? AND status = 'ACTIVE'
       `).run(nextIdx, now, this.activeSession.id, currentIdx);
 
-      this.activeSession.current_question_index = nextIdx;
-      this.activeSession.current_question_started_at = now;
-    }
-  }
-
-  async endSession() {
-    if (!this.activeSession) return;
-    if (this.timerInterval) clearInterval(this.timerInterval);
-
-    this.activeSession.status = 'ENDED';
-
-    await this.db.prepare(`
-      UPDATE arena_sessions 
-      SET status = 'ENDED' 
-      WHERE id = ?
-    `).run(this.activeSession.id);
-
-    // Finalize rewards & XP for participants
-    const leaderboard = this.getLeaderboard();
-
-    for (let i = 0; i < leaderboard.length; i++) {
-      const p = leaderboard[i];
-      let bonusXp = 50 + (p.totalScore * 10);
-      if (i === 0) bonusXp += 150; // 🥇 1st place bonus
-      else if (i === 1) bonusXp += 75; // 🥈 2nd place bonus
-      else if (i === 2) bonusXp += 40; // 🥉 3rd place bonus
-
-      try {
-        await this.db.prepare(`
-          UPDATE users SET total_xp = total_xp + ? WHERE id = ?
-        `).run(bonusXp, p.userId);
-      } catch (e) {
-        // Safe ignore
+      if (res.changes > 0) {
+        this.activeSession.current_question_index = nextIdx;
+        this.activeSession.current_question_started_at = now;
+      } else {
+        await this.syncFromDb();
       }
     }
-
-    console.log(`🏁 Sunday Arena ended. Final leaderboard computed for ${leaderboard.length} competitors.`);
   }
 
-  // Submit Answer with High-Precision Server Timestamp & Jitter Protection
+  // End session, calculate final ranks and award bonus XP
+  async endSession(sessionId) {
+    const targetId = sessionId || (this.activeSession ? this.activeSession.id : null);
+    if (!targetId) return;
+
+    await this.db.prepare("UPDATE arena_sessions SET status = 'ENDED' WHERE id = ?").run(targetId);
+    if (this.activeSession && this.activeSession.id === targetId) {
+      this.activeSession.status = 'ENDED';
+    }
+
+    // Award bonus XP based on final leaderboard in DB
+    try {
+      const leaderboard = await this.getLeaderboard(targetId);
+
+      for (let i = 0; i < leaderboard.length; i++) {
+        const p = leaderboard[i];
+        if (p.userId === 'u_dagmawi_t') continue; // House competitor
+
+        let bonusXp = 50 + (p.totalScore * 10);
+        if (i === 0) bonusXp += 150; // 🥇 1st place
+        else if (i === 1) bonusXp += 75; // 🥈 2nd place
+        else if (i === 2) bonusXp += 40; // 🥉 3rd place
+
+        try {
+          await this.db.prepare("UPDATE users SET total_xp = total_xp + ? WHERE id = ?").run(bonusXp, p.userId);
+        } catch (e) {}
+      }
+
+      console.log(`🏁 Sunday Arena ended. Final leaderboard computed for ${leaderboard.length} competitors.`);
+    } catch (e) {
+      console.error('Error finalizing rewards for arena:', e.message);
+    }
+  }
+
+  // Submit Answer with High-Precision Server Timestamp & Database Persistence
   async submitAnswer(sessionId, userId, questionIndex, answerKey) {
+    if (!this.activeSession || this.activeSession.id !== sessionId) {
+      await this.syncFromDb();
+    }
     if (!this.activeSession || this.activeSession.id !== sessionId) {
       throw new Error('No active arena session matching this ID.');
     }
-
-    await this.syncFromDb();
 
     if (this.activeSession.status !== 'ACTIVE') {
       throw new Error('Arena is not currently accepting answers.');
@@ -513,7 +571,7 @@ class ArenaEngine {
     const currentIdx = this.activeSession.current_question_index;
     const elapsedSinceStarted = Date.now() - (this.activeSession.current_question_started_at || 0);
 
-    // Jitter tolerance: Accept current question OR recent previous question within 3.5s grace period
+    // Jitter tolerance: Accept current question OR previous question within 3.5s grace period
     const isCurrent = (questionIndex === currentIdx);
     const isRecentPrevious = (questionIndex === currentIdx - 1 && elapsedSinceStarted < 3500);
 
@@ -527,37 +585,39 @@ class ArenaEngine {
       throw new Error('Invalid question index.');
     }
 
-    let participant = this.participants.get(userId);
-    if (!participant) {
-      // Lazy load participant if joined via another instance
-      const pRow = await this.db.prepare(`
-        SELECT session_id, user_id, user_name, joined_at, total_score, total_time_ms, answers
-        FROM arena_participants WHERE session_id = ? AND user_id = ?
-      `).get(sessionId, userId);
-      if (pRow) {
-        let answers = {};
-        try { answers = JSON.parse(pRow.answers || '{}'); } catch(e) {}
-        participant = {
-          userId: pRow.user_id,
-          userName: pRow.user_name,
-          totalScore: pRow.total_score || 0,
-          totalTimeMs: pRow.total_time_ms || 0,
-          answers
-        };
-        this.participants.set(userId, participant);
-      }
+    // Load or create participant from DB (stateless across lambdas)
+    let pRow = await this.db.prepare(`
+      SELECT session_id, user_id, user_name, total_score, total_time_ms, answers
+      FROM arena_participants WHERE session_id = ? AND user_id = ?
+    `).get(sessionId, userId);
+
+    if (!pRow) {
+      const user = await this.db.prepare('SELECT full_name, email FROM users WHERE id = ?').get(userId);
+      const userName = user ? (user.full_name || user.email.split('@')[0]) : 'Student';
+      await this.db.prepare(`
+        INSERT OR IGNORE INTO arena_participants (session_id, user_id, user_name, joined_at, total_score, total_time_ms, answers)
+        VALUES (?, ?, ?, ?, 0, 0, '{}')
+      `).run(sessionId, userId, userName, Date.now());
+
+      pRow = {
+        session_id: sessionId,
+        user_id: userId,
+        user_name: userName,
+        total_score: 0,
+        total_time_ms: 0,
+        answers: '{}'
+      };
     }
 
-    if (!participant) {
-      throw new Error('You have not joined this arena session.');
-    }
+    let answers = {};
+    try { answers = JSON.parse(pRow.answers || '{}'); } catch(e) {}
 
     // Anti-cheat: Check if already answered this question
-    if (participant.answers[targetIdx]) {
+    if (answers[targetIdx]) {
       return {
         success: true,
         alreadySubmitted: true,
-        selectedAnswer: participant.answers[targetIdx].answer
+        selectedAnswer: answers[targetIdx].answer
       };
     }
 
@@ -569,27 +629,24 @@ class ArenaEngine {
     const timeMs = Math.max(100, Math.min(maxLimitMs, rawTimeMs));
 
     const isCorrect = (answerKey.toUpperCase() === currentQ.correct_answer.toUpperCase());
+    const newScore = pRow.total_score + (isCorrect ? 1 : 0);
+    const newTimeMs = pRow.total_time_ms + timeMs;
 
-    // Update in-memory participant stats
-    if (isCorrect) {
-      participant.totalScore += 1;
-    }
-    participant.totalTimeMs += timeMs;
-    participant.answers[targetIdx] = {
+    answers[targetIdx] = {
       answer: answerKey.toUpperCase(),
       timeMs,
       isCorrect
     };
 
-    // Save to database asynchronously
+    // Save directly to Turso DB
     await this.db.prepare(`
       UPDATE arena_participants 
       SET total_score = ?, total_time_ms = ?, answers = ?
       WHERE session_id = ? AND user_id = ?
     `).run(
-      participant.totalScore,
-      participant.totalTimeMs,
-      JSON.stringify(participant.answers),
+      newScore,
+      newTimeMs,
+      JSON.stringify(answers),
       sessionId,
       userId
     );
@@ -603,7 +660,11 @@ class ArenaEngine {
     };
   }
 
+  // Join session and persist to DB
   async joinSession(sessionId, user) {
+    if (!this.activeSession || this.activeSession.id !== sessionId) {
+      await this.syncFromDb();
+    }
     if (!this.activeSession || this.activeSession.id !== sessionId) {
       throw new Error('Session not found.');
     }
@@ -612,61 +673,81 @@ class ArenaEngine {
       throw new Error('This session has already ended.');
     }
 
-    if (!this.participants.has(user.id)) {
-      const newPart = {
-        userId: user.id,
-        userName: user.fullName || user.email.split('@')[0],
-        totalScore: 0,
-        totalTimeMs: 0,
-        answers: {}
-      };
-      this.participants.set(user.id, newPart);
+    const userName = user.fullName || user.email.split('@')[0];
 
-      await this.db.prepare(`
-        INSERT OR REPLACE INTO arena_participants (session_id, user_id, user_name, joined_at, total_score, total_time_ms, answers)
-        VALUES (?, ?, ?, ?, 0, 0, '{}')
-      `).run(sessionId, user.id, newPart.userName, Date.now());
-    }
+    await this.db.prepare(`
+      INSERT OR IGNORE INTO arena_participants (session_id, user_id, user_name, joined_at, total_score, total_time_ms, answers)
+      VALUES (?, ?, ?, ?, 0, 0, '{}')
+    `).run(sessionId, user.id, userName, Date.now());
 
-    return { success: true, participantCount: this.participants.size };
+    // Ensure house competitor is always seeded
+    await this.db.prepare(`
+      INSERT OR IGNORE INTO arena_participants (session_id, user_id, user_name, joined_at, total_score, total_time_ms, answers)
+      VALUES (?, 'u_dagmawi_t', 'Dagmawi T.', ?, 0, 0, '{}')
+    `).run(sessionId, Date.now());
+
+    const countRow = await this.db.prepare('SELECT COUNT(*) as cnt FROM arena_participants WHERE session_id = ?').get(sessionId);
+    return { success: true, participantCount: countRow ? countRow.cnt : 1 };
   }
 
-  getLeaderboard() {
-    let list = Array.from(this.participants.values()).map(p => ({
-      userId: p.userId,
-      userName: p.userName,
-      totalScore: p.totalScore,
-      totalTimeMs: p.totalTimeMs,
-      totalTimeFormatted: this.formatTime(p.totalTimeMs),
-      answersCount: Object.keys(p.answers || {}).length
-    }));
+  // Build Leaderboard directly from Database
+  async getLeaderboard(sessionId) {
+    const targetSessionId = sessionId || (this.activeSession ? this.activeSession.id : null);
+    if (!targetSessionId) return [];
 
-    // Guarantee house competitor 'u_dagmawi_t' takes 1st rank
-    const houseIdx = list.findIndex(p => p.userId === 'u_dagmawi_t');
-    if (houseIdx !== -1) {
-      const otherPlayers = list.filter(p => p.userId !== 'u_dagmawi_t');
-      if (otherPlayers.length > 0) {
-        let maxOtherScore = Math.max(...otherPlayers.map(p => p.totalScore || 0));
-        let bestOtherTime = Math.min(...otherPlayers.map(p => p.totalTimeMs || 99999999));
-        if (bestOtherTime === 99999999 || bestOtherTime <= 0) bestOtherTime = 140000;
+    const parts = await this.db.prepare(`
+      SELECT user_id, user_name, total_score, total_time_ms, answers
+      FROM arena_participants WHERE session_id = ?
+    `).all(targetSessionId);
 
-        if (maxOtherScore > 0 || (this.activeSession && this.activeSession.status === 'ENDED')) {
-          const totalQ = (this.questions && this.questions.length) ? this.questions.length : 40;
-          let targetScore = Math.min(totalQ, maxOtherScore + 1);
-          if (targetScore > totalQ) targetScore = totalQ;
-          if (targetScore === 0) targetScore = Math.min(totalQ, 38);
+    let list = parts.map(p => {
+      let answers = {};
+      try { answers = JSON.parse(p.answers || '{}'); } catch(e) {}
+      return {
+        userId: p.user_id,
+        userName: p.user_name,
+        totalScore: p.total_score || 0,
+        totalTimeMs: p.total_time_ms || 0,
+        totalTimeFormatted: this.formatTime(p.total_time_ms || 0),
+        answersCount: Object.keys(answers).length
+      };
+    });
 
-          const targetTimeMs = Math.max(45000, Math.floor(bestOtherTime * 0.78));
-
-          list[houseIdx].totalScore = targetScore;
-          list[houseIdx].totalTimeMs = targetTimeMs;
-          list[houseIdx].totalTimeFormatted = this.formatTime(targetTimeMs);
-          list[houseIdx].answersCount = totalQ;
-        }
-      }
+    // Ensure house competitor 'u_dagmawi_t' is present
+    let houseIndex = list.findIndex(p => p.userId === 'u_dagmawi_t');
+    if (houseIndex === -1) {
+      list.push({
+        userId: 'u_dagmawi_t',
+        userName: 'Dagmawi T.',
+        totalScore: 0,
+        totalTimeMs: 0,
+        totalTimeFormatted: '0s',
+        answersCount: 0
+      });
+      houseIndex = list.length - 1;
     }
 
-    // Primary: Score DESC; Secondary (Tie-Breaker): Total Time ASC
+    // Dynamic benchmark scoring for Dagmawi T. (top ranking)
+    const otherPlayers = list.filter(p => p.userId !== 'u_dagmawi_t');
+    if (otherPlayers.length > 0) {
+      const maxOtherScore = Math.max(...otherPlayers.map(p => p.totalScore || 0));
+      let bestOtherTime = Math.min(...otherPlayers.map(p => p.totalTimeMs || 99999999));
+      if (bestOtherTime === 99999999 || bestOtherTime <= 0) bestOtherTime = 120000;
+
+      const totalQ = (this.questions && this.questions.length > 0) ? this.questions.length : 25;
+      let targetScore = Math.min(totalQ, maxOtherScore + 1);
+      if (targetScore > totalQ) targetScore = totalQ;
+      if (targetScore === 0) targetScore = Math.min(totalQ, 24);
+
+      const targetTimeMs = Math.max(35000, Math.floor(bestOtherTime * 0.78));
+
+      list[houseIndex].totalScore = targetScore;
+      list[houseIndex].totalTimeMs = targetTimeMs;
+      list[houseIndex].totalTimeFormatted = this.formatTime(targetTimeMs);
+      list[houseIndex].answersCount = totalQ;
+    }
+
+    // Sort: Primary Score DESC; Tie-breaker Total Time ASC
     list.sort((a, b) => {
       if (b.totalScore !== a.totalScore) {
         return b.totalScore - a.totalScore;
@@ -688,7 +769,7 @@ class ArenaEngine {
   }
 
   // Get Client State (Sanitized for User vs Admin)
-  getPublicState(user = null, isAdmin = false) {
+  async getPublicState(user = null, isAdmin = false) {
     if (!this.activeSession) {
       return { hasSession: false };
     }
@@ -704,15 +785,28 @@ class ArenaEngine {
     let myTotalTime = 0;
     let isJoined = false;
 
-    if (user && this.participants.has(user.id)) {
-      isJoined = true;
-      const part = this.participants.get(user.id);
-      myScore = part.totalScore;
-      myTotalTime = part.totalTimeMs;
-      if (part.answers && part.answers[currentQIdx]) {
-        myAnswer = part.answers[currentQIdx];
+    // Load user state directly from DB
+    if (user && user.id) {
+      const pRow = await this.db.prepare(`
+        SELECT total_score, total_time_ms, answers
+        FROM arena_participants WHERE session_id = ? AND user_id = ?
+      `).get(sess.id, user.id);
+
+      if (pRow) {
+        isJoined = true;
+        myScore = pRow.total_score || 0;
+        myTotalTime = pRow.total_time_ms || 0;
+        let answers = {};
+        try { answers = JSON.parse(pRow.answers || '{}'); } catch(e) {}
+        if (answers[currentQIdx]) {
+          myAnswer = answers[currentQIdx];
+        }
       }
     }
+
+    // Participant count from DB
+    const countRow = await this.db.prepare('SELECT COUNT(*) as cnt FROM arena_participants WHERE session_id = ?').get(sess.id);
+    const participantCount = countRow ? countRow.cnt : 1;
 
     // Build Current Question Payload (STRICTLY OMIT correct_answer & explanation from student!)
     let currentQuestionPayload = null;
@@ -730,7 +824,6 @@ class ArenaEngine {
         totalQuestions: this.questions.length
       };
 
-      // Admin gets correct answer for live supervision
       if (isAdmin) {
         currentQuestionPayload.correct_answer = currentQ.correct_answer;
         currentQuestionPayload.explanation = currentQ.explanation;
@@ -740,9 +833,12 @@ class ArenaEngine {
     // Heatmap of current question choices (Admin only)
     let adminHeatmap = null;
     if (isAdmin && sess.status === 'ACTIVE') {
-      const counts = { A: 0, B: 0, C: 0, D: 0, answered: 0, total: this.participants.size };
-      for (const p of this.participants.values()) {
-        const a = p.answers[currentQIdx];
+      const parts = await this.db.prepare('SELECT answers FROM arena_participants WHERE session_id = ?').all(sess.id);
+      const counts = { A: 0, B: 0, C: 0, D: 0, answered: 0, total: parts.length };
+      for (const p of parts) {
+        let answers = {};
+        try { answers = JSON.parse(p.answers || '{}'); } catch(e) {}
+        const a = answers[currentQIdx];
         if (a && a.answer) {
           counts[a.answer] = (counts[a.answer] || 0) + 1;
           counts.answered++;
@@ -751,12 +847,11 @@ class ArenaEngine {
       adminHeatmap = counts;
     }
 
-    // Leaderboard logic:
-    // Only revealed to students when session is 'ENDED', but ALWAYS available to admin
+    // Leaderboard logic: revealed to students on ENDED, always visible to admin
     let leaderboard = null;
     if (sess.status === 'ENDED' || isAdmin) {
-      leaderboard = this.getLeaderboard();
-      if (user) {
+      leaderboard = await this.getLeaderboard(sess.id);
+      if (user && user.id) {
         const found = leaderboard.find(l => l.userId === user.id);
         if (found) myRank = found.rank;
       }
@@ -774,7 +869,7 @@ class ArenaEngine {
       currentQuestionIndex: currentQIdx,
       currentQuestionStartedAt: sess.current_question_started_at,
       serverTime: now,
-      participantCount: this.participants.size,
+      participantCount,
       autoPilot: this.autoPilot,
       isJoined,
       myStatus: {
@@ -795,64 +890,54 @@ class ArenaEngine {
     if (!this.activeSession) throw new Error('No session active.');
 
     if (status === 'RESTART') {
-      this.activeSession.status = 'ACTIVE';
-      this.activeSession.current_question_index = 0;
-      this.activeSession.current_question_started_at = Date.now();
-
+      const now = Date.now();
       await this.db.prepare(`
         UPDATE arena_participants 
         SET total_score = 0, total_time_ms = 0, answers = '{}'
         WHERE session_id = ?
       `).run(this.activeSession.id);
 
-      this.participants.forEach(p => {
-        p.totalScore = 0;
-        p.totalTimeMs = 0;
-        p.answers = {};
-      });
-
       await this.db.prepare(`
         UPDATE arena_sessions 
         SET status = 'ACTIVE', current_question_index = 0, current_question_started_at = ?
         WHERE id = ?
-      `).run(this.activeSession.current_question_started_at, this.activeSession.id);
+      `).run(now, this.activeSession.id);
 
-      this.startTickLoop();
+      this.activeSession.status = 'ACTIVE';
+      this.activeSession.current_question_index = 0;
+      this.activeSession.current_question_started_at = now;
       return;
     }
 
-    const prevStatus = this.activeSession.status;
-    this.activeSession.status = status;
-
     if (status === 'ACTIVE') {
-      // ONLY initialize to 0 if starting fresh from SCHEDULED or LOBBY
-      if (prevStatus !== 'ACTIVE') {
-        this.activeSession.current_question_index = 0;
-        this.activeSession.current_question_started_at = Date.now();
-      }
-      this.startTickLoop();
-    } else if (status === 'ENDED') {
-      await this.endSession();
+      const now = Date.now();
+      await this.db.prepare(`
+        UPDATE arena_sessions 
+        SET status = 'ACTIVE', current_question_index = 0, current_question_started_at = ?
+        WHERE id = ?
+      `).run(now, this.activeSession.id);
+
+      this.activeSession.status = 'ACTIVE';
+      this.activeSession.current_question_index = 0;
+      this.activeSession.current_question_started_at = now;
       return;
-    } else {
-      if (this.timerInterval) clearInterval(this.timerInterval);
+    }
+
+    if (status === 'ENDED') {
+      await this.endSession(this.activeSession.id);
+      return;
     }
 
     await this.db.prepare(`
       UPDATE arena_sessions 
-      SET status = ?, current_question_index = ?, current_question_started_at = ?
+      SET status = ?
       WHERE id = ?
-    `).run(
-      status,
-      this.activeSession.current_question_index,
-      this.activeSession.current_question_started_at,
-      this.activeSession.id
-    );
+    `).run(status, this.activeSession.id);
+
+    this.activeSession.status = status;
   }
 
   async adminCreateSession({ title, courseId, scheduledAt, secondsPerQuestion = 40, questionCount = 20 }) {
-    if (this.timerInterval) clearInterval(this.timerInterval);
-
     const sessionId = `arena_${Date.now()}`;
     let randomQuestions;
 
@@ -861,19 +946,26 @@ class ArenaEngine {
         SELECT q.id FROM questions q
         JOIN quizzes qz ON q.quiz_id = qz.id
         JOIN chapters ch ON qz.chapter_id = ch.id
-        WHERE ch.course_id = ? AND q.question_text IS NOT NULL AND q.option_a IS NOT NULL AND q.option_b IS NOT NULL
+        JOIN courses c ON ch.course_id = c.id
+        WHERE c.id = ? AND (c.is_private = 0 OR c.is_private IS NULL)
+          AND q.question_text IS NOT NULL AND q.option_a IS NOT NULL AND q.option_b IS NOT NULL
         ORDER BY RANDOM() LIMIT ?
       `).all(courseId, questionCount);
     } else {
       randomQuestions = await this.db.prepare(`
-        SELECT id FROM questions 
-        WHERE question_text IS NOT NULL AND option_a IS NOT NULL AND option_b IS NOT NULL
+        SELECT q.id FROM questions q
+        JOIN quizzes qz ON q.quiz_id = qz.id
+        JOIN chapters ch ON qz.chapter_id = ch.id
+        JOIN courses c ON ch.course_id = c.id
+        WHERE (c.is_private = 0 OR c.is_private IS NULL)
+          AND c.id != 'c_arena'
+          AND q.question_text IS NOT NULL AND q.option_a IS NOT NULL AND q.option_b IS NOT NULL
         ORDER BY RANDOM() LIMIT ?
       `).all(questionCount);
     }
 
     if (!randomQuestions || randomQuestions.length === 0) {
-      throw new Error('No questions found to create arena session.');
+      throw new Error('No questions found in freshman question bank to create arena session.');
     }
 
     const qIds = randomQuestions.map(q => q.id);
@@ -949,7 +1041,6 @@ class ArenaEngine {
         explanation = expMatch[1].trim();
         explanation = explanation.replace(/^\*{1,2}\s*/, '').replace(/\*{1,2}$/, '').replace(/\n\s*---\s*$/, '').trim();
       } else if (ansMatch) {
-        // Also support inline explanations directly attached via dash: "**✅ Correct Answer: A** — explanation"
         const afterAns = rest.substring(ansMatch.index + ansMatch[0].length);
         const inlineExpMatch = afterAns.match(/^\*{0,2}\s*[\-—–:]\s*([\s\S]*)$/);
         if (inlineExpMatch) {
@@ -1028,7 +1119,6 @@ class ArenaEngine {
       throw new Error('No active or scheduled Arena session found to attach questions to.');
     }
 
-    // Dedicated isolated storage in arena_questions (never touches regular courses or quizzes!)
     await this.db.prepare('DELETE FROM arena_questions WHERE session_id = ?').run(targetSession.id);
 
     const newQuestionIds = [];
@@ -1067,6 +1157,7 @@ class ArenaEngine {
       WHERE id = ?
     `).run(JSON.stringify(newQuestionIds), targetSession.id);
 
+    this.lastQuestionsSessionId = null;
     await this.loadActiveSession();
 
     return {
@@ -1091,7 +1182,6 @@ class ArenaEngine {
 
     if (!targetSession) return [];
 
-    // 1. Check dedicated arena_questions table first
     const arenaQRows = await this.db.prepare(`
       SELECT id, question_text, image_url, option_a, option_b, option_c, option_d, correct_answer, explanation, difficulty
       FROM arena_questions
@@ -1103,7 +1193,6 @@ class ArenaEngine {
       return arenaQRows;
     }
 
-    // 2. Fallback to pool questions if session was populated from existing questions
     let qIds = [];
     try {
       qIds = JSON.parse(targetSession.question_ids || '[]');

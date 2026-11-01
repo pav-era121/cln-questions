@@ -7,6 +7,8 @@ const arena = {
     timeRemaining: 0,
     lockedAnswer: null,
     lastQuestionIndex: -1,
+    lastSessionId: null,
+    lastStatus: null,
     audioCtx: null
   },
 
@@ -367,11 +369,25 @@ const arena = {
         return;
       }
 
+      // Check if session changed or status changed
+      const isNewSession = (this.state.lastSessionId && this.state.lastSessionId !== data.sessionId);
+      const isStatusChanged = (this.state.lastStatus && this.state.lastStatus !== data.status);
+
+      if (isNewSession || isStatusChanged) {
+        this.state.lastQuestionIndex = -1;
+        this.state.lockedAnswer = null;
+        this.state.lastSessionId = data.sessionId;
+        this.state.lastStatus = data.status;
+      } else {
+        this.state.lastSessionId = data.sessionId;
+        this.state.lastStatus = data.status;
+      }
+
       // JITTER & REVERSE PROTECTION:
-      // If we are currently showing an ACTIVE question, reject any response with a lower question index
+      // If we are currently showing an ACTIVE question in the same session:
       if (data.status === 'ACTIVE' && data.currentQuestion) {
+        // Reject stale out-of-order packets with a lower index
         if (this.state.lastQuestionIndex !== -1 && data.currentQuestion.index < this.state.lastQuestionIndex) {
-          // Stale out-of-order packet: do not revert back!
           return;
         }
 
@@ -410,6 +426,27 @@ const arena = {
 
     if (remainingSec <= 5 && remainingSec > 0) {
       this.playSound('tick');
+    }
+
+    // Sync locked state if confirmed by server
+    if (data.myStatus && data.myStatus.answered && (!this.state.lockedAnswer || this.state.lockedAnswer !== data.myStatus.selectedAnswer)) {
+      this.state.lockedAnswer = data.myStatus.selectedAnswer;
+      const buttons = document.querySelectorAll('.arena-option-btn');
+      buttons.forEach(btn => {
+        btn.disabled = true;
+        const keySpan = btn.querySelector('.opt-badge');
+        if (keySpan && keySpan.innerText.trim() === this.state.lockedAnswer) {
+          btn.classList.add('locked');
+        }
+      });
+      const statusMsg = document.getElementById('arena-answer-status-msg');
+      if (statusMsg) {
+        statusMsg.innerHTML = `
+          <div style="margin-top:20px; padding:12px 16px; background:var(--green-soft); border:1px solid rgba(54,147,84,0.3); border-radius:10px; color:var(--green); font-weight:700; text-align:center;">
+            ✓ Your answer (${this.state.lockedAnswer}) is locked in! Waiting for round countdown...
+          </div>
+        `;
+      }
     }
 
     const heatmapEl = document.getElementById('arena-live-heatmap');

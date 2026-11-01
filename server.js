@@ -1438,7 +1438,7 @@ app.get('/api/arena/current', optionalAuthenticateToken, async (req, res) => {
   try {
     await arenaEngine.ensureReady();
     const isAdmin = isUserAdmin(req.user);
-    const state = arenaEngine.getPublicState(req.user, isAdmin);
+    const state = await arenaEngine.getPublicState(req.user, isAdmin);
     res.json(state);
   } catch (err) {
     res.status(500).json({ error: 'Failed to retrieve arena status: ' + err.message });
@@ -1476,7 +1476,7 @@ app.post('/api/arena/submit', authenticateToken, verifyActiveUser, async (req, r
 app.get('/api/arena/leaderboard/:sessionId', async (req, res) => {
   try {
     await arenaEngine.ensureReady();
-    const leaderboard = arenaEngine.getLeaderboard();
+    const leaderboard = await arenaEngine.getLeaderboard(req.params.sessionId);
     res.json({ leaderboard });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1493,7 +1493,7 @@ app.post('/api/admin/arena/status', authenticateToken, requireAdmin, async (req,
     } else if (status) {
       await arenaEngine.adminSetStatus(status);
     }
-    const state = arenaEngine.getPublicState(req.user, true);
+    const state = await arenaEngine.getPublicState(req.user, true);
     res.json({ message: 'Arena status updated.', state });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -1522,7 +1522,7 @@ app.post('/api/admin/arena/create', authenticateToken, requireAdmin, async (req,
 app.get('/api/admin/arena/monitor', authenticateToken, requireAdmin, async (req, res) => {
   try {
     await arenaEngine.ensureReady();
-    const state = arenaEngine.getPublicState(req.user, true);
+    const state = await arenaEngine.getPublicState(req.user, true);
     res.json(state);
   } catch (err) {
     res.status(500).json({ error: err.message });
